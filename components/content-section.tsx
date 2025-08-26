@@ -1,0 +1,559 @@
+"use client"
+
+import * as React from "react"
+import { useState, useEffect, useRef } from "react"
+import { MediaCard, MediaItem, Movie, TVShow, Book } from "./media-card"
+import { searchContentByTitle, searchBooksByTitle } from "@/lib/api-helpers"
+import { Film, Tv, BookOpen } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { useModal } from "./modal-provider"
+
+type Section = "movies" | "tvshows" | "books"
+
+interface ContentSectionProps {
+  initialMovies: Movie[]
+  initialTVShows: TVShow[]
+  initialBooks: Book[]
+  tmdbApiKey: string
+  googleBooksApiKey: string
+}
+
+export function ContentSection({ 
+  initialMovies, 
+  initialTVShows, 
+  initialBooks, 
+  tmdbApiKey, 
+  googleBooksApiKey 
+}: ContentSectionProps) {
+  const { setTmdbApiKey } = useModal()
+  
+  // Set TMDB API key in modal context
+  useEffect(() => {
+    setTmdbApiKey(tmdbApiKey)
+  }, [tmdbApiKey, setTmdbApiKey])
+  
+  const [activeSection, setActiveSection] = useState<Section>("movies")
+  const [isInitialized, setIsInitialized] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<MediaItem[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [displayCounts, setDisplayCounts] = useState({
+    movies: 20,
+    tvshows: 20,
+    books: 20
+  })
+  const [isLoading, setIsLoading] = useState(false)
+  const debounceTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const loadMoreRef = useRef<HTMLDivElement>(null)
+
+  // Handle infinite scroll
+  const loadMore = () => {
+    if (isLoading || searchQuery) {
+      console.log('🚫 LoadMore blocked:', { isLoading, searchQuery: !!searchQuery });
+      return;
+    }
+    
+    console.log('📈 Loading more content for:', activeSection);
+    setIsLoading(true);
+    
+    // Add a delay to make infinite scroll smoother
+    setTimeout(() => {
+      setDisplayCounts(prev => {
+        const newCount = prev[activeSection] + 20;
+        console.log(`📊 Updated ${activeSection} count from ${prev[activeSection]} to ${newCount}`);
+        return {
+          ...prev,
+          [activeSection]: newCount
+        };
+      });
+      setIsLoading(false);
+    }, 300); // 300ms delay for smoother experience
+  };
+
+  // Set up intersection observer for infinite scroll
+  useEffect(() => {
+    // Only set up observer when not searching and component is initialized
+    if (searchQuery || !isInitialized) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isLoading) {
+          console.log('🔄 Infinite scroll triggered for:', activeSection);
+          loadMore();
+        }
+      },
+      { 
+        threshold: 0.1,
+        rootMargin: '100px' // Start loading 100px before reaching the trigger
+      }
+    );
+
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      if (loadMoreRef.current) {
+        observer.observe(loadMoreRef.current);
+        console.log('👁️ Observer attached to:', loadMoreRef.current);
+      }
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [activeSection, isLoading, searchQuery, isInitialized]);
+
+  useEffect(() => {
+    // Check initial hash
+    const hash = window.location.hash.slice(1) as Section
+    if (hash && ["movies", "tvshows", "books"].includes(hash)) {
+      setActiveSection(hash)
+    }
+    
+    // Mark as initialized after processing initial hash
+    setIsInitialized(true)
+
+    // Listen for hash changes
+    const handleHashChange = () => {
+      const newHash = window.location.hash.slice(1) as Section
+      if (newHash && ["movies", "tvshows", "books"].includes(newHash)) {
+        setActiveSection(newHash)
+        setSearchQuery("")
+        setSearchResults([])
+      }
+    }
+
+    window.addEventListener("hashchange", handleHashChange)
+    return () => window.removeEventListener("hashchange", handleHashChange)
+  }, [])
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([])
+      setIsSearching(false)
+      return
+    }
+
+    setIsSearching(true)
+    clearTimeout(debounceTimeout.current!)
+
+    debounceTimeout.current = setTimeout(async () => {
+      try {
+        let results: MediaItem[] = []
+
+        if (activeSection === "movies") {
+          const movieResults = await searchContentByTitle({
+            title: searchQuery,
+            tmdbApiKey,
+            type: "movie"
+          })
+          results = movieResults.map((movie: any) => ({ ...movie, type: "movie" as const }))
+        } else if (activeSection === "tvshows") {
+          const tvResults = await searchContentByTitle({
+            title: searchQuery,
+            tmdbApiKey,
+            type: "tv"
+          })
+          results = tvResults.map((tv: any) => ({ ...tv, type: "tvshow" as const }))
+        } else if (activeSection === "books") {
+          const bookResults = await searchBooksByTitle(searchQuery, googleBooksApiKey)
+          results = bookResults.map((book: any) => ({ ...book, type: "book" as const }))
+        }
+
+        setSearchResults(results)
+      } catch (error) {
+        console.error("Search error:", error)
+        setSearchResults([])
+      } finally {
+        setIsSearching(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(debounceTimeout.current!)
+  }, [searchQuery, activeSection, tmdbApiKey, googleBooksApiKey])
+
+  const getCurrentData = (): MediaItem[] => {
+    if (searchQuery.trim() && searchResults.length > 0) {
+      return searchResults
+    }
+
+    const staticData = searchQuery.trim() ? [] : (() => {
+      const currentDisplayCount = displayCounts[activeSection];
+      switch (activeSection) {
+        case "movies":
+          return initialMovies.slice(0, currentDisplayCount).map(movie => ({ ...movie, type: "movie" as const }))
+        case "tvshows":
+          return initialTVShows.slice(0, currentDisplayCount).map(tv => ({ ...tv, type: "tvshow" as const }))
+        case "books":
+          return initialBooks.slice(0, currentDisplayCount).map(book => ({ ...book, type: "book" as const }))
+        default:
+          return initialMovies.slice(0, currentDisplayCount).map(movie => ({ ...movie, type: "movie" as const }))
+      }
+    })()
+
+    return staticData
+  }
+
+  const filteredData = getCurrentData()
+
+  const getSectionTitle = () => {
+    switch (activeSection) {
+      case "movies":
+        return "Movies"
+      case "tvshows":
+        return "TV Shows"
+      case "books":
+        return "Books"
+      default:
+        return "Movies"
+    }
+  }
+
+  const getSectionDescription = () => {
+    switch (activeSection) {
+      case "movies":
+        return "Discover and save your favorite movies"
+      case "tvshows":
+        return "Explore popular TV series and shows"
+      case "books":
+        return "Find great books and build your reading list"
+      default:
+        return "Discover and save your favorite movies"
+    }
+  }
+
+  const navItems = [
+    { id: "movies" as Section, label: "Movies", icon: Film },
+    { id: "tvshows" as Section, label: "TV", icon: Tv },
+    { id: "books" as Section, label: "Books", icon: BookOpen },
+  ]
+
+
+
+  // Don't render until hash is processed to prevent flash
+  if (!isInitialized) {
+    return (
+      <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        {/* Header Skeleton */}
+        <div className="mb-8 sm:mb-12">
+          {/* Navigation Skeleton */}
+          <div className="flex items-center justify-center text-sm sm:text-base mb-8">
+            <div className="flex items-center space-x-6">
+              <div className="h-6 w-16 bg-gray-100 dark:bg-gray-400 rounded animate-pulse"></div>
+              <div className="h-4 w-px bg-gray-200 dark:bg-gray-400"></div>
+              <div className="h-6 w-16 bg-gray-100 dark:bg-gray-400 rounded animate-pulse"></div>
+              <div className="h-4 w-px bg-gray-200 dark:bg-gray-400"></div>
+              <div className="h-6 w-16 bg-gray-100 dark:bg-gray-400 rounded animate-pulse"></div>
+            </div>
+          </div>
+          
+          {/* Search Bar Skeleton */}
+          <div className="mx-4 sm:mx-auto max-w-2xl">
+            <div className="h-12 w-full bg-gray-100 dark:bg-gray-400 rounded-lg animate-pulse"></div>
+          </div>
+        </div>
+
+        {/* Grid Skeleton */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-6 md:gap-8">
+          {Array.from({ length: 24 }).map((_, index) => (
+            <div key={index}>
+              {/* Image Skeleton */}
+              <div className="aspect-[2/3] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-400 dark:to-gray-500 rounded-lg animate-pulse"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12">
+      {/* Header */}
+      <div className="mb-8 sm:mb-12">
+        {/* Simple Navigation */}
+        <div className="flex items-center justify-center text-sm sm:text-base mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {navItems.map((item, index) => {
+            const Icon = item.icon
+            const isActive = activeSection === item.id
+            
+            return (
+              <div key={item.id} className="flex items-center">
+                {index > 0 && <div className="h-4 w-px bg-gray-400 dark:bg-gray-400 mx-6 opacity-40" />}
+                <button
+                  onClick={() => {
+                    setActiveSection(item.id)
+                    window.location.hash = item.id
+                    setSearchQuery("")
+                    setSearchResults([])
+                  }}
+                  className={cn(
+                    "flex items-center gap-2 transition-all duration-300",
+                    "sm:hover:scale-105", // Scale effect only on desktop hover
+                    "active:scale-95", // Scale down on click for all devices
+                    isActive ? "text-primary" : "text-gray-500 hover:text-foreground"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="font-semibold">{item.label}</span>
+                </button>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Search Bar */}
+        <div className="mx-4 sm:mx-auto max-w-2xl animate-in fade-in slide-in-from-bottom-2 duration-300 delay-100">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            // Keep the search query when Enter is pressed
+            // The search is already handled by onChange, so we just prevent form submission
+          }}>
+            <div className="relative">
+              <svg 
+                className="w-5 h-5 text-muted-foreground absolute top-3.5 left-4" 
+                fill="currentColor" 
+                viewBox="0 0 18 18"
+              >
+                <path 
+                  fillRule="evenodd" 
+                  d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" 
+                  clipRule="evenodd"
+                />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    // Keep the search query when Enter is pressed
+                  }
+                }}
+                className="h-12 w-full px-12 rounded-lg focus:outline-none hover:cursor-pointer border-2 border-primary bg-white dark:bg-surface shadow-xl"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => {
+                    setSearchQuery("")
+                    setSearchResults([])
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* Previous Implementation (Commented Out) */}
+      {/*
+        <div className="mb-8 sm:mb-12">
+          <div className="text-center max-w-4xl mx-auto mb-6 sm:mb-8">
+            <div className="flex justify-center mb-6 sm:mb-8">
+              <div className={cn(
+                "flex items-center bg-surface-elevated/50 backdrop-blur-sm rounded-2xl p-2 border border-border/30 shadow-lg transition-all duration-500 ease-in-out",
+                isSearchExpanded ? "w-full max-w-3xl" : "space-x-2 sm:space-x-3"
+              )}>
+                {navItems.map((item) => {
+                  const Icon = item.icon
+                  const isActive = activeSection === item.id
+                  const isThisItemExpanded = isActive && isSearchExpanded
+                  
+                  if (isThisItemExpanded) {
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center space-x-3 bg-surface-elevated rounded-xl px-4 py-4 transition-all duration-500 ease-in-out w-full shadow-lg"
+                      >
+                        <button
+                          onClick={() => handleSectionClick(item.id)}
+                          className="flex items-center justify-center shrink-0 transition-all duration-300 hover:scale-110 p-1 rounded-lg hover:bg-surface/80 text-primary"
+                        >
+                          <Icon className="h-5 w-5" />
+                        </button>
+                        <div className="flex-1 relative min-w-0">
+                          <input
+                            type="text"
+                            placeholder={`Search ${item.label.toLowerCase()}...`}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full px-4 py-3 text-base bg-transparent rounded-lg focus:outline-none focus:ring-0 transition-all duration-300 placeholder:text-muted-foreground text-foreground"
+                            autoFocus
+                          />
+                          {searchQuery && (
+                            <button
+                              onClick={() => {
+                                setSearchQuery("")
+                                setSearchResults([])
+                              }}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded-full"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  }
+                  
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleSectionClick(item.id)}
+                      className={cn(
+                        "flex items-center rounded-xl transition-all duration-300 relative",
+                        isSearchExpanded
+                          ? "px-3 py-3 lg:py-2.5"
+                          : "space-x-2 sm:space-x-3 px-4 sm:px-6 py-3 sm:py-3.5 lg:py-3",
+                        "text-sm sm:text-base font-semibold",
+                        isActive
+                          ? "bg-primary text-white shadow-lg shadow-primary/25 scale-105"
+                          : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground hover:scale-102"
+                      )}
+                    >
+                      <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                      {!isSearchExpanded && <span>{item.label}</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      */}
+
+      {/* Grid - Always 2 columns on small screens */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-6 md:gap-8">
+        {(() => {
+          const originalCount = filteredData.length;
+          const validItems = filteredData.filter((item) => {
+            // Filter out invalid items before rendering
+            if (!item || !item.type) return false;
+            
+            // Additional validation for books
+            if (item.type === 'book') {
+              if (!item.volumeInfo) return false;
+              // Ensure we have at least a title or authors
+              const hasDisplayableContent = item.volumeInfo.title || 
+                (item.volumeInfo.authors && item.volumeInfo.authors.length > 0);
+              return hasDisplayableContent;
+            }
+            
+            return true;
+          });
+          
+          const filteredCount = originalCount - validItems.length;
+          if (filteredCount > 0 && process.env.NODE_ENV === 'development') {
+            console.log(`🔍 Filtered out ${filteredCount} invalid items from ${originalCount} total items`);
+          }
+          
+          return validItems;
+        })()
+          .map((item, index) => {
+            // Debug logging for problematic items
+            if (process.env.NODE_ENV === 'development' && index === 21) {
+              console.log(`🚨 22nd item (index 21):`, {
+                item,
+                type: item?.type,
+                id: item?.id,
+                hasVolumeInfo: item?.type === 'book' ? !!item.volumeInfo : 'N/A'
+              });
+            }
+            
+            // Calculate animation delay based on position in current page, not total index
+            // Only animate the first 20 items initially, and new items when loaded
+            const currentDisplayCount = displayCounts[activeSection];
+            const previousDisplayCount = currentDisplayCount - 20;
+            const isNewlyLoaded = index >= previousDisplayCount;
+            const animationIndex = isNewlyLoaded ? (index - previousDisplayCount) : index;
+            const shouldAnimate = index < 20 || isNewlyLoaded;
+            
+            return (
+              <div
+                key={`${item.type}-${item.id}-${index}`}
+                className={shouldAnimate ? "animate-in fade-in slide-in-from-bottom-4" : ""}
+                style={shouldAnimate ? { 
+                  animationDelay: `${Math.min(animationIndex * 50, 1000)}ms`, 
+                  animationFillMode: 'both' 
+                } : {}}
+              >
+                <MediaCard item={item} />
+              </div>
+            )
+          })}
+      </div>
+
+      {/* Search Loading Skeleton */}
+      {isSearching && (
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-6 md:gap-8">
+          {Array.from({ length: 12 }).map((_, index) => (
+            <div key={`search-skeleton-${index}`}>
+              {/* Image Skeleton */}
+              <div className="aspect-[2/3] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-400 dark:to-gray-500 rounded-lg animate-pulse"></div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Infinite Scroll Trigger */}
+      {!searchQuery && (() => {
+        const totalItems = activeSection === "movies" ? initialMovies.length : 
+                          activeSection === "tvshows" ? initialTVShows.length : 
+                          initialBooks.length
+        const currentDisplayCount = displayCounts[activeSection];
+        const shouldShowTrigger = currentDisplayCount < totalItems;
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🎯 Infinite scroll trigger:', {
+            activeSection,
+            currentDisplayCount,
+            totalItems,
+            shouldShowTrigger
+          });
+        }
+        
+        return shouldShowTrigger && (
+          <div 
+            ref={loadMoreRef}
+            className="h-10 w-full mt-8"
+            aria-hidden="true"
+          />
+        )
+      })()}
+
+      {/* Empty State */}
+      {filteredData.length === 0 && searchQuery && !isSearching && (
+        <div className="flex flex-col items-center justify-center py-16 sm:py-20">
+          <div className="text-center max-w-md px-4">
+            <div className="mb-6 relative">
+              <div className="h-20 w-20 sm:h-24 sm:w-24 mx-auto rounded-full bg-surface-elevated/50 flex items-center justify-center">
+                <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-muted-foreground/20 flex items-center justify-center">
+                  <span className="text-muted-foreground/50 text-lg">🔍</span>
+                </div>
+              </div>
+              <div className="absolute -top-2 -right-2 h-6 w-6 sm:h-8 sm:w-8 rounded-full bg-gradient-to-r from-primary/20 to-primary-hover/20 animate-pulse" />
+            </div>
+            <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-3">No results found</h3>
+            <p className="text-sm sm:text-base text-muted-foreground leading-relaxed mb-6">
+              We couldn't find any {getSectionTitle().toLowerCase()} matching "{searchQuery}". 
+              Try different keywords or browse our collection.
+            </p>
+            <button
+              onClick={() => setSearchQuery("")}
+              className="px-4 sm:px-6 py-2.5 sm:py-3 bg-primary text-white rounded-lg sm:rounded-xl hover:bg-primary-hover transition-colors duration-300 font-medium text-sm sm:text-base"
+            >
+              Clear Search
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

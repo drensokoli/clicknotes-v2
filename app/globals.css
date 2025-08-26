@@ -1,0 +1,300 @@
+@import "tailwindcss";
+
+:root {
+  /* Light theme colors */
+  --background: #f0f5ff;
+  --foreground: #233876;
+  
+  /* Custom color palette - Light mode */
+  --yale-blue: #233876;
+  --marian-blue: #1e429f;
+  --byzantine-blue: #1a56db;
+  --royal-blue: #1c64f2;
+  --azure: #3f83f8;
+  --ruddy-blue: #76a9fa;
+  --jordy-blue: #a4cafe;
+  --uranian-blue: #c3ddfd;
+  --alice-blue: #e1effe;
+  --alice-blue-2: #f0f5ff;
+  
+  /* Semantic colors - Light mode */
+  --primary: var(--byzantine-blue);
+  --primary-hover: var(--royal-blue);
+  --surface: #ffffff;
+  --surface-elevated: #f8fafc;
+  --border: #e2e8f0;
+  --muted: #64748b;
+  --muted-foreground: #475569;
+}
+
+[data-theme="dark"] {
+  /* Dark theme colors */
+  --background: #000000;
+  --foreground: #ffffff;
+  
+  /* Custom color palette - Dark mode */
+  --clr-dark: #000000;
+  --clr-light: #ffffff;
+  --clr-primary: #1a56db;
+  --clr-primary-10: #4a68e0;
+  --clr-primary-20: #6879e4;
+  --clr-primary-30: #818be9;
+  --clr-primary-40: #989ded;
+  --clr-primary-50: #aeb0f1;
+  --clr-surface: #121212;
+  --clr-surface-10: #282828;
+  --clr-surface-20: #3f3f3f;
+  --clr-surface-30: #575757;
+  --clr-surface-40: #717171;
+  --clr-surface-50: #8b8b8b;
+  --clr-surface-tonal: #181923;
+  --clr-surface-tonal-10: #2d2e38;
+  --clr-surface-tonal-20: #44444d;
+  --clr-surface-tonal-30: #5c5c64;
+  --clr-surface-tonal-40: #75757c;
+  --clr-surface-tonal-50: #8f8f95;
+  
+  /* Semantic colors - Dark mode */
+  --primary: var(--clr-primary);
+  --primary-hover: var(--clr-primary-10);
+  --surface: var(--clr-surface);
+  --surface-elevated: var(--clr-surface-10);
+  --border: var(--clr-surface-20);
+  --muted: var(--clr-surface-40);
+  --muted-foreground: var(--clr-surface-50);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: "Courier New", Courier, monospace;
+}
+
+/* Additional Tailwind custom colors for dark theme */
+@theme inline {
+  --color-dark: var(--clr-dark, #000000);
+  --color-light: var(--clr-light, #ffffff);
+  --color-primary-10: var(--clr-primary-10, #4a68e0);
+  --color-primary-20: var(--clr-primary-20, #6879e4);
+  --color-primary-30: var(--clr-primary-30, #818be9);
+  --color-primary-40: var(--clr-primary-40, #989ded);
+  --color-primary-50: var(--clr-primary-50, #aeb0f1);
+  --color-surface-10: var(--clr-surface-10, #282828);
+  --color-surface-20: var(--clr-surface-20, #3f3f3f);
+  --color-surface-30: var(--clr-surface-30, #575757);
+  --color-surface-40: var(--clr-surface-40, #717171);
+  --color-surface-50: var(--clr-surface-50, #8b8b8b);
+  --color-surface-tonal: var(--clr-surface-tonal, #181923);
+  --color-surface-tonal-10: var(--clr-surface-tonal-10, #2d2e38);
+  --color-surface-tonal-20: var(--clr-surface-tonal-20, #44444d);
+  --color-surface-tonal-30: var(--clr-surface-tonal-30, #5c5c64);
+  --color-surface-tonal-40: var(--clr-surface-tonal-40, #75757c);
+  --color-surface-tonal-50: var(--clr-surface-tonal-50, #8f8f95);
+  
+  /* Light theme specific colors */
+  --color-yale-blue: var(--yale-blue, #233876);
+  --color-marian-blue: var(--marian-blue, #1e429f);
+  --color-byzantine-blue: var(--byzantine-blue, #1a56db);
+  --color-royal-blue: var(--royal-blue, #1c64f2);
+  --color-azure: var(--azure, #3f83f8);
+  --color-ruddy-blue: var(--ruddy-blue, #76a9fa);
+  --color-jordy-blue: var(--jordy-blue, #a4cafe);
+  --color-uranian-blue: var(--uranian-blue, #c3ddfd);
+  --color-alice-blue: var(--alice-blue, #e1effe);
+  --color-alice-blue-2: var(--alice-blue-2, #f0f5ff);
+}
+
+/* Theme transition utilities */
+* {
+  transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+
+/* Prevent theme flash during hydration */
+html {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* Smooth theme transitions for media card buttons */
+.media-card-button {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Ensure consistent button styling during hydration */
+.media-card-button.bg-white\/50 {
+  background-color: rgba(255, 255, 255, 0.5);
+  color: rgb(17, 24, 39);
+}
+
+.media-card-button.dark\:bg-gray-800\/50 {
+  background-color: rgba(31, 41, 55, 0.5);
+  color: rgb(243, 244, 246);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Custom animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-from-bottom-4 {
+  from {
+    transform: translateY(1rem);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-from-bottom-2 {
+  from {
+    transform: translateY(0.5rem);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-in {
+  animation-duration: 0.6s;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.slide-in-from-bottom-4 {
+  animation-name: slide-in-from-bottom-4;
+}
+
+.slide-in-from-bottom-2 {
+  animation-name: slide-in-from-bottom-2;
+}
+
+/* Smooth button animations */
+.button-slide-up {
+  transform: translateY(8px);
+  opacity: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.button-slide-up.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.button-slide-up.show.delay-1 {
+  transition-delay: 0ms;
+}
+
+.button-slide-up.show.delay-2 {
+  transition-delay: 50ms;
+}
+
+.button-slide-up.show.delay-3 {
+  transition-delay: 100ms;
+}
+
+/* Desktop hover animations */
+.group:hover .button-slide-up.delay-1 {
+  transform: translateY(0);
+  opacity: 1;
+  transition-delay: 0ms;
+}
+
+.group:hover .button-slide-up.delay-2 {
+  transform: translateY(0);
+  opacity: 1;
+  transition-delay: 50ms;
+}
+
+.group:hover .button-slide-up.delay-3 {
+  transform: translateY(0);
+  opacity: 1;
+  transition-delay: 100ms;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* Text selection */
+::selection {
+  background: var(--primary);
+  color: white;
+}
+
+/* Focus styles */
+.focus-visible:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Line clamping utility */
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}

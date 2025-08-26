@@ -1,0 +1,245 @@
+// Fallback data for when APIs are not accessible (SSL issues, rate limits, etc.)
+
+export const fallbackMovies = [
+  {
+    id: 1,
+    title: "The Matrix",
+    overview: "A computer programmer discovers that reality as he knows it might not be real at all.",
+    poster_path: null,
+    backdrop_path: null,
+    release_date: "1999-03-31",
+    vote_average: 8.7,
+    genre_ids: [28, 878],
+    adult: false,
+  },
+  {
+    id: 2,
+    title: "Inception",
+    overview: "A thief who steals corporate secrets through dream-sharing technology is given the inverse task of planting an idea.",
+    poster_path: null,
+    backdrop_path: null,
+    release_date: "2010-07-16",
+    vote_average: 8.8,
+    genre_ids: [28, 878, 53],
+    adult: false,
+  },
+  {
+    id: 3,
+    title: "The Dark Knight",
+    overview: "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests.",
+    poster_path: null,
+    backdrop_path: null,
+    release_date: "2008-07-18",
+    vote_average: 9.0,
+    genre_ids: [28, 80, 18],
+    adult: false,
+  },
+  {
+    id: 4,
+    title: "Pulp Fiction",
+    overview: "The lives of two mob hitmen, a boxer, a gangster and his wife intertwine in four tales of violence and redemption.",
+    poster_path: null,
+    backdrop_path: null,
+    release_date: "1994-10-14",
+    vote_average: 8.9,
+    genre_ids: [80, 18],
+    adult: false,
+  },
+  {
+    id: 5,
+    title: "The Shawshank Redemption",
+    overview: "Two imprisoned men bond over a number of years, finding solace and eventual redemption through acts of common decency.",
+    poster_path: null,
+    backdrop_path: null,
+    release_date: "1994-09-23",
+    vote_average: 9.3,
+    genre_ids: [18],
+    adult: false,
+  }
+];
+
+export const fallbackTVShows = [
+  {
+    id: 1,
+    name: "Breaking Bad",
+    overview: "A high school chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine.",
+    poster_path: null,
+    backdrop_path: null,
+    first_air_date: "2008-01-20",
+    vote_average: 9.5,
+    genre_ids: [80, 18, 53],
+    number_of_seasons: 5,
+  },
+  {
+    id: 2,
+    name: "Game of Thrones",
+    overview: "Nine noble families fight for control over the lands of Westeros, while an ancient enemy returns after being dormant for millennia.",
+    poster_path: null,
+    backdrop_path: null,
+    first_air_date: "2011-04-17",
+    vote_average: 9.2,
+    genre_ids: [12, 18, 14],
+    number_of_seasons: 8,
+  },
+  {
+    id: 3,
+    name: "Stranger Things",
+    overview: "When a young boy disappears, his mother, a police chief and his friends must confront terrifying supernatural forces.",
+    poster_path: null,
+    backdrop_path: null,
+    first_air_date: "2016-07-15",
+    vote_average: 8.7,
+    genre_ids: [18, 14, 27],
+    number_of_seasons: 4,
+  },
+  {
+    id: 4,
+    name: "The Crown",
+    overview: "Follows the political rivalries and romance of Queen Elizabeth II's reign and the events that shaped the second half of the 20th century.",
+    poster_path: null,
+    backdrop_path: null,
+    first_air_date: "2016-11-04",
+    vote_average: 8.6,
+    genre_ids: [36, 18, 36],
+    number_of_seasons: 6,
+  },
+  {
+    id: 5,
+    name: "The Office",
+    overview: "A mockumentary on a group of typical office workers, where the workday consists of ego clashes, inappropriate behavior, and tedium.",
+    poster_path: null,
+    backdrop_path: null,
+    first_air_date: "2005-03-24",
+    vote_average: 8.9,
+    genre_ids: [35],
+    number_of_seasons: 9,
+  }
+];
+
+export const fallbackBooks = [
+  {
+    id: "1",
+    volumeInfo: {
+      title: "To Kill a Mockingbird",
+      authors: ["Harper Lee"],
+      description: "A gripping, heart-wrenching, and wholly remarkable tale of coming-of-age in a South poisoned by virulent prejudice.",
+      publishedDate: "1960-07-11",
+      pageCount: 376,
+      averageRating: 4.3,
+      imageLinks: {
+        thumbnail: null,
+      },
+      previewLink: "",
+      infoLink: "",
+      language: "en",
+      publisher: "J.B. Lippincott & Co.",
+    },
+    saleInfo: {
+      saleability: "FOR_SALE",
+      listPrice: {
+        amount: 15.99,
+        currencyCode: "USD",
+      },
+    },
+  },
+  {
+    id: "2",
+    volumeInfo: {
+      title: "1984",
+      authors: ["George Orwell"],
+      description: "A dystopian social science fiction novel that follows the life of Winston Smith, a low-ranking member of 'the Party'.",
+      publishedDate: "1949-06-08",
+      pageCount: 328,
+      averageRating: 4.2,
+      imageLinks: {
+        thumbnail: null,
+      },
+      previewLink: "",
+      infoLink: "",
+      language: "en",
+      publisher: "Secker & Warburg",
+    },
+    saleInfo: {
+      saleability: "FOR_SALE",
+      listPrice: {
+        amount: 13.99,
+        currencyCode: "USD",
+      },
+    },
+  },
+  {
+    id: "3",
+    volumeInfo: {
+      title: "Pride and Prejudice",
+      authors: ["Jane Austen"],
+      description: "A romantic novel that critiques the British landed gentry at the end of the 18th century.",
+      publishedDate: "1813-01-28",
+      pageCount: 432,
+      averageRating: 4.3,
+      imageLinks: {
+        thumbnail: null,
+      },
+      previewLink: "",
+      infoLink: "",
+      language: "en",
+      publisher: "T. Egerton",
+    },
+    saleInfo: {
+      saleability: "FOR_SALE",
+      listPrice: {
+        amount: 12.99,
+        currencyCode: "USD",
+      },
+    },
+  },
+  {
+    id: "4",
+    volumeInfo: {
+      title: "The Great Gatsby",
+      authors: ["F. Scott Fitzgerald"],
+      description: "A classic American novel set in the summer of 1922, told through the eyes of Nick Carraway.",
+      publishedDate: "1925-04-10",
+      pageCount: 180,
+      averageRating: 3.9,
+      imageLinks: {
+        thumbnail: null,
+      },
+      previewLink: "",
+      infoLink: "",
+      language: "en",
+      publisher: "Charles Scribner's Sons",
+    },
+    saleInfo: {
+      saleability: "FOR_SALE",
+      listPrice: {
+        amount: 14.99,
+        currencyCode: "USD",
+      },
+    },
+  },
+  {
+    id: "5",
+    volumeInfo: {
+      title: "Harry Potter and the Philosopher's Stone",
+      authors: ["J.K. Rowling"],
+      description: "The first novel in the Harry Potter series and Rowling's debut novel, it follows Harry Potter's first year at Hogwarts.",
+      publishedDate: "1997-06-26",
+      pageCount: 223,
+      averageRating: 4.5,
+      imageLinks: {
+        thumbnail: null,
+      },
+      previewLink: "",
+      infoLink: "",
+      language: "en",
+      publisher: "Bloomsbury",
+    },
+    saleInfo: {
+      saleability: "FOR_SALE",
+      listPrice: {
+        amount: 16.99,
+        currencyCode: "USD",
+      },
+    },
+  }
+];
