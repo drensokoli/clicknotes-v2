@@ -7,7 +7,7 @@ import Link from "next/link"
 
 export function Navigation() {
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-border/30 bg-surface/70 backdrop-blur-lg shadow-md" suppressHydrationWarning>
+    <nav className="sticky top-0 z-50 w-full border-b border-border/30 bg-surface/70 backdrop-blur-lg shadow-md">
       <div className="container mx-auto px-4 sm:px-6">
         <div className="flex h-16 sm:h-20 items-center justify-between">
           {/* Logo */}

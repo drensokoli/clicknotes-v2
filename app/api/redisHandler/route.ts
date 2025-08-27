@@ -171,53 +171,89 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === 'movies') {
-      const data = await client.get('movies')
-      console.log('🎬 Movies from Redis:', {
-        hasData: !!data,
-        dataType: typeof data,
-        length: data ? JSON.parse(data).length : 0
+      // Get paginated movies from Redis (4 groups of 60)
+      const movies1 = await client.get('movies1');
+      console.log('🎬 Movies from Redis (paginated):', {
+        hasData: !!movies1,
+        dataType: typeof movies1,
+        length: movies1 ? JSON.parse(movies1).length : 0
       });
-      await client.disconnect()
-      return NextResponse.json(data ? JSON.parse(data) : null)
+      await client.disconnect();
+      return NextResponse.json(movies1 ? JSON.parse(movies1) : null);
     } else if (type === 'tvshows') {
-      const data = await client.get('tvshows')
-      console.log('📺 TV Shows from Redis:', {
-        hasData: !!data,
-        dataType: typeof data,
-        length: data ? JSON.parse(data).length : 0
+      // Get paginated TV shows from Redis (4 groups of 60)
+      const tvshows1 = await client.get('tvshows1');
+      console.log('📺 TV Shows from Redis (paginated):', {
+        hasData: !!tvshows1,
+        dataType: typeof tvshows1,
+        length: tvshows1 ? JSON.parse(tvshows1).length : 0
       });
-      await client.disconnect()
-      return NextResponse.json(data ? JSON.parse(data) : null)
+      await client.disconnect();
+      return NextResponse.json(tvshows1 ? JSON.parse(tvshows1) : null);
     } else if (type === 'books') {
-      const data = await client.get('books')
-      console.log('📚 Books from Redis:', {
+      // Get paginated books from Redis (groups of 60, last group may have fewer)
+      const books1 = await client.get('books1');
+      console.log('📚 Books from Redis (paginated):', {
+        hasData: !!books1,
+        dataType: typeof books1,
+        length: books1 ? JSON.parse(books1).length : 0
+      });
+      await client.disconnect();
+      return NextResponse.json(books1 ? JSON.parse(books1) : null);
+    } else if (type && type.startsWith('movies') && type !== 'movies') {
+      // Handle movies2, movies3, movies4
+      const key = type; // e.g., 'movies2'
+      const data = await client.get(key);
+      console.log(`🎬 ${key} from Redis:`, {
         hasData: !!data,
         dataType: typeof data,
         length: data ? JSON.parse(data).length : 0
       });
-      await client.disconnect()
-      return NextResponse.json(data ? JSON.parse(data) : null)
+      await client.disconnect();
+      return NextResponse.json(data ? JSON.parse(data) : null);
+    } else if (type && type.startsWith('tvshows') && type !== 'tvshows') {
+      // Handle tvshows2, tvshows3, tvshows4
+      const key = type; // e.g., 'tvshows2'
+      const data = await client.get(key);
+      console.log(`📺 ${key} from Redis:`, {
+        hasData: !!data,
+        dataType: typeof data,
+        length: data ? JSON.parse(data).length : 0
+      });
+      await client.disconnect();
+      return NextResponse.json(data ? JSON.parse(data) : null);
+    } else if (type && type.startsWith('books') && type !== 'books') {
+      // Handle books2, books3, books4, etc.
+      const key = type; // e.g., 'books2'
+      const data = await client.get(key);
+      console.log(`📚 ${key} from Redis:`, {
+        hasData: !!data,
+        dataType: typeof data,
+        length: data ? JSON.parse(data).length : 0
+      });
+      await client.disconnect();
+      return NextResponse.json(data ? JSON.parse(data) : null);
     } else {
-      // Return all data
-      console.log('🔄 Fetching all data from Redis...');
-      const [movies, tvShows, books] = await Promise.all([
-        client.get('movies'),
-        client.get('tvshows'),
-        client.get('books')
+      // Return all first pages of paginated data
+      console.log('🔄 Fetching all first pages from Redis...');
+      const [movies1, tvshows1, books1] = await Promise.all([
+        client.get('movies1'),
+        client.get('tvshows1'),
+        client.get('books1')
       ])
       
-      console.log('📊 All Redis data:', {
-        movies: movies ? JSON.parse(movies).length : 0,
-        tvShows: tvShows ? JSON.parse(tvShows).length : 0,
-        books: books ? JSON.parse(books).length : 0
+      console.log('📊 All Redis first pages:', {
+        movies: movies1 ? JSON.parse(movies1).length : 0,
+        tvShows: tvshows1 ? JSON.parse(tvshows1).length : 0,
+        books: books1 ? JSON.parse(books1).length : 0
       });
       
       await client.disconnect()
       
       return NextResponse.json({
-        movies: movies ? JSON.parse(movies) : null,
-        tvshows: tvShows ? JSON.parse(tvShows) : null,
-        books: books ? JSON.parse(books) : null
+        movies: movies1 ? JSON.parse(movies1) : null,
+        tvshows: tvshows1 ? JSON.parse(tvshows1) : null,
+        books: books1 ? JSON.parse(books1) : null
       })
     }
   } catch (error) {

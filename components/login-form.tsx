@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PasswordInput } from "@/components/ui/password-input"
 
 export function LoginForm({
   className,
@@ -24,7 +25,14 @@ export function LoginForm({
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [showResendVerification, setShowResendVerification] = useState(false)
+  const [resendMessage, setResendMessage] = useState("")
   const router = useRouter()
+
+  // Debug useEffect to monitor state changes
+  useEffect(() => {
+    console.log('State changed - showResendVerification:', showResendVerification, 'error:', error)
+  }, [showResendVerification, error])
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,6 +40,30 @@ export function LoginForm({
     setError("")
 
     try {
+      // First check if the user exists and their verification status
+      const checkResponse = await fetch("/api/auth/check-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      })
+
+      if (checkResponse.ok) {
+        const userData = await checkResponse.json()
+        console.log('User data from check-user API:', userData)
+        
+        if (!userData.emailVerified) {
+          console.log('Setting error and showing resend verification')
+          setError("Please verify your email before signing in. Check your inbox for the verification link.")
+          setShowResendVerification(true)
+          console.log('showResendVerification set to true')
+          setIsLoading(false)
+          return
+        }
+      }
+
+      // Proceed with sign in
       const result = await signIn("credentials", {
         email,
         password,
@@ -62,6 +94,36 @@ export function LoginForm({
     }
   }
 
+  const handleResendVerification = async () => {
+    setIsLoading(true)
+    setResendMessage("")
+    setError("")
+
+    try {
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to resend verification")
+      }
+
+      setResendMessage("New verification email sent! Check your inbox.")
+      setShowResendVerification(false)
+      setError("")
+    } catch (error) {
+      setResendMessage(error instanceof Error ? error.message : "An error occurred. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
@@ -75,9 +137,9 @@ export function LoginForm({
           <form onSubmit={handleEmailLogin}>
             <div className="grid gap-6">
               <div className="flex flex-col gap-4">
-                <Button 
+                <Button
                   type="button"
-                  variant="outline" 
+                  variant="outline"
                   className="w-full"
                   onClick={handleGoogleLogin}
                   disabled={isLoading}
@@ -92,8 +154,8 @@ export function LoginForm({
                 </Button>
               </div>
               <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
-                <span className="bg-card text-muted-foreground relative z-10 px-2">
-                  Or continue with email
+                <span className="bg-surface text-muted-foreground relative z-10 px-2">
+                  Or continue with
                 </span>
               </div>
               <div className="grid gap-6">
@@ -102,9 +164,15 @@ export function LoginForm({
                   <Input
                     id="email"
                     type="email"
-                    placeholder="m@example.com"
+                    placeholder="user@domain.com"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value)
+                      // Clear resend state when email changes
+                      setShowResendVerification(false)
+                      setResendMessage("")
+                      setError("")
+                    }}
                     required
                     disabled={isLoading}
                   />
@@ -119,18 +187,40 @@ export function LoginForm({
                       Forgot your password?
                     </Link>
                   </div>
-                  <Input 
-                    id="password" 
-                    type="password" 
+                  <PasswordInput
+                    id="password"
                     value={password}
+                    placeholder="••••••••••••"
                     onChange={(e) => setPassword(e.target.value)}
-                    required 
+                    required
                     disabled={isLoading}
                   />
                 </div>
                 {error && (
-                  <div className="text-sm text-red-600 text-center">
+                  <div className="text-sm text-red-700 dark:text-red-400 text-center">
                     {error}
+                    {showResendVerification && (
+                      <div className="mt-3">
+                        <Button
+                          type="button"
+                          onClick={handleResendVerification}
+                          disabled={isLoading}
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                        >
+                          <span className="text-primary">
+                            {isLoading ? "Sending..." : "Send New Link"}
+                          </span>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {resendMessage && (
+                  <div className="text-sm text-center">
+                    {resendMessage}
                   </div>
                 )}
                 <Button type="submit" className="w-full" disabled={isLoading}>

@@ -1,5 +1,5 @@
 import "./setup" // Setup SSL configuration first
-import { Navigation } from "@/components/navigation"
+import { ClientNavigation } from "@/components/client-navigation"
 import { ContentSection } from "@/components/content-section"
 import { MediaDetailsModal } from "@/components/media-details-modal"
 import { fetchPopularMoviesWithFetch, fetchPopularTVShowsWithFetch, fetchBestsellersWithFetch } from "@/lib/fetch-helpers"
@@ -27,30 +27,159 @@ export const metadata: Metadata = {
   }
 }
 
-// Helper function to fetch data from Redis
-async function fetchFromRedis(baseUrl: string) {
+// Global cache for Redis data (server-side only)
+let redisDataCache: {
+  movies: any[] | null;
+  tvshows: any[] | null;
+  books: any[] | null;
+  lastFetched: number | null;
+} = {
+  movies: null,
+  tvshows: null,
+  books: null,
+  lastFetched: null
+};
+
+// Cache duration: 7 days in milliseconds
+const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000;
+
+// Helper function to fetch specific page from Redis with proper caching
+async function fetchPageFromRedis(baseUrl: string, mediaType: string, page: number = 1) {
   try {
-    console.log('🔍 Attempting to fetch data from Redis...')
-    const response = await fetch(`${baseUrl}/api/redisHandler`, {
+    const key = `${mediaType}${page}`;
+    console.log(`🔍 Fetching ${key} from Redis...`)
+    const response = await fetch(`${baseUrl}/api/redisHandler?type=${key}`, {
       next: { revalidate: 60 * 60 * 24 * 7 } // Cache for 7 days
     })
     
     if (response.ok) {
       const data = await response.json()
-      console.log('✅ Redis data fetched successfully:', {
-        movies: data.movies?.length || 0,
-        tvshows: data.tvshows?.length || 0,
-        books: data.books?.length || 0
-      })
-      return data
+      if (Array.isArray(data) && data.length > 0) {
+        console.log(`✅ Redis ${key} data fetched successfully: ${data.length} items`)
+        return data
+      } else {
+        console.log(`⚠️ Redis ${key} data is empty or invalid`)
+        return null
+      }
     } else {
-      console.log('❌ Redis response not OK:', response.status)
+      console.log(`❌ Redis ${key} response not OK:`, response.status)
       return null
     }
   } catch (error) {
-    console.log('🚫 Redis fetch failed:', error)
+    console.log("🚫 Redis fetch failed:", error)
     return null
   }
+}
+
+// Helper function to get cached Redis data or fetch if needed
+async function getCachedRedisData(baseUrl: string) {
+  const now = Date.now();
+  
+  // Check if we have valid cached data
+  if (redisDataCache.lastFetched && 
+      (now - redisDataCache.lastFetched) < CACHE_DURATION &&
+      redisDataCache.movies && 
+      redisDataCache.tvshows && 
+      redisDataCache.books) {
+    
+    const cacheAgeHours = Math.round((now - redisDataCache.lastFetched) / (1000 * 60 * 60));
+    console.log('✅ Using cached Redis data (age:', cacheAgeHours, 'hours)');
+    console.log('📊 Cached data counts:', {
+      movies: redisDataCache.movies?.length || 0,
+      tvshows: redisDataCache.tvshows?.length || 0,
+      books: redisDataCache.books?.length || 0
+    });
+    return {
+      movies: redisDataCache.movies,
+      tvshows: redisDataCache.tvshows,
+      books: redisDataCache.books
+    };
+  }
+  
+  console.log('🔄 Cache expired or missing, fetching fresh data from Redis...');
+  console.log('📊 Cache status:', {
+    hasLastFetched: !!redisDataCache.lastFetched,
+    lastFetchedAge: redisDataCache.lastFetched ? Math.round((now - redisDataCache.lastFetched) / (1000 * 60 * 60)) : 'N/A',
+    hasMovies: !!redisDataCache.movies,
+    hasTVShows: !!redisDataCache.tvshows,
+    hasBooks: !!redisDataCache.books
+  });
+  
+  // Fetch fresh data from Redis
+  const [redisMovies, redisTVShows, redisBooks] = await Promise.allSettled([
+    fetchPageFromRedis(baseUrl, 'movies', 1),
+    fetchPageFromRedis(baseUrl, 'tvshows', 1),
+    fetchPageFromRedis(baseUrl, 'books', 1)
+  ]);
+  
+  // Check if all Redis data is available
+  const hasRedisMovies = redisMovies.status === 'fulfilled' && redisMovies.value;
+  const hasRedisTVShows = redisTVShows.status === 'fulfilled' && redisTVShows.value;
+  const hasRedisBooks = redisBooks.status === 'fulfilled' && redisBooks.value;
+  
+  if (hasRedisMovies && hasRedisTVShows && hasRedisBooks) {
+    // Update cache with fresh data
+    redisDataCache = {
+      movies: redisMovies.value,
+      tvshows: redisTVShows.value,
+      books: redisBooks.value,
+      lastFetched: now
+    };
+    
+    console.log('💾 Updated Redis data cache with fresh data');
+    return {
+      movies: redisMovies.value,
+      tvshows: redisTVShows.value,
+      books: redisBooks.value
+    };
+  } else {
+    console.log('⚠️ Some Redis data missing, cannot cache');
+    return null;
+  }
+}
+
+// Helper function to clear cache (useful for development/testing)
+function clearRedisCache() {
+  redisDataCache = {
+    movies: null,
+    tvshows: null,
+    books: null,
+    lastFetched: null
+  };
+  console.log('🗑️ Redis data cache cleared');
+}
+
+// Expose cache clearing function globally for development
+if (typeof global !== 'undefined') {
+  (global as any).clearRedisCache = clearRedisCache;
+}
+
+// Helper function to get active Redis database with failover
+async function getActiveRedis(baseUrl: string) {
+  try {
+    // Try primary Redis first
+    const response = await fetch(`${baseUrl}/api/redisHandler?type=movies1`);
+    if (response.ok) {
+      console.log('✅ Using primary Redis database');
+      return baseUrl;
+    }
+  } catch (error) {
+    console.log('⚠️ Primary Redis failed, trying backup...');
+  }
+  
+  // Try backup Redis (you'll need to implement this endpoint)
+  try {
+    const backupUrl = process.env.BACKUP_REDIS_URL || baseUrl.replace('3000', '3001');
+    const response = await fetch(`${backupUrl}/api/redisHandler?type=movies1`);
+    if (response.ok) {
+      console.log('✅ Using backup Redis database');
+      return backupUrl;
+    }
+  } catch (error) {
+    console.log('❌ Both Redis databases failed');
+  }
+  
+  return null; // Fall back to APIs
 }
 
 export default async function Home() {
@@ -67,40 +196,107 @@ export default async function Home() {
   let movies: any[] = []
   let tvShows: any[] = []
   let books: any[] = []
+  
+  // Track which Redis keys have been fetched for progressive loading
+  let redisKeysFetched = {
+    movies: 1, // Start with movies1
+    tvshows: 1, // Start with tvshows1
+    books: 1   // Start with books1
+  }
 
   try {
-    // First, try to get data from Redis
-    console.log('🔄 Step 1: Attempting Redis fetch...')
-    const redisData = await fetchFromRedis(baseUrl)
+    // Step 1: Try to get cached Redis data or fetch if needed
+    console.log('🚀 Starting data fetch for server-side props...')
     
-    if (redisData && redisData.movies && redisData.tvshows && redisData.books) {
-      // Redis has all the data we need
-      console.log('✅ Using Redis data for all media types')
-      movies = redisData.movies
-      tvShows = redisData.tvshows
-      books = redisData.books
+    // Try to get cached Redis data first
+    const cachedData = await getCachedRedisData(baseUrl);
+    
+    if (cachedData) {
+      // Use cached data
+      console.log('✅ Using cached Redis data for server-side props');
+      movies = cachedData.movies || [];
+      tvShows = cachedData.tvshows || [];
+      books = cachedData.books || [];
     } else {
-      // Redis is missing some or all data, fall back to API calls
-      console.log('⚠️ Redis data incomplete, falling back to API calls...')
+      // No cached data available, try to get from Redis
+      console.log('⚠️ No cached data, attempting Redis fetch...')
       
-      // Fetch data in parallel using fetch API for better SSL handling
-      // Fetch full dataset like in v1 (20 pages = ~400 movies/shows)
-      const results = await Promise.allSettled([
-        fetchPopularMoviesWithFetch(tmdbApiKey, 20, baseUrl),
-        fetchPopularTVShowsWithFetch(tmdbApiKey, 20, baseUrl),
-        fetchBestsellersWithFetch(googleBooksApiKey, nyTimesApiKey, baseUrl)
+      // Get active Redis database
+      const activeRedis = await getActiveRedis(baseUrl)
+      if (!activeRedis) {
+        console.log('❌ No Redis available, falling back to APIs')
+        throw new Error('No Redis available')
+      }
+      
+      console.log('📊 Fetching first pages from Redis...')
+      
+      // Fetch ONLY the first keys from Redis (movies1, tvshows1, books1)
+      const [redisMovies, redisTVShows, redisBooks] = await Promise.allSettled([
+        fetchPageFromRedis(activeRedis, 'movies', 1), // movies1
+        fetchPageFromRedis(activeRedis, 'tvshows', 1), // tvshows1
+        fetchPageFromRedis(activeRedis, 'books', 1)   // books1
       ])
-
-      movies = results[0].status === 'fulfilled' ? results[0].value || fallbackMovies : fallbackMovies
-      tvShows = results[1].status === 'fulfilled' ? results[1].value || fallbackTVShows : fallbackTVShows
-      books = results[2].status === 'fulfilled' ? results[2].value || fallbackBooks : fallbackBooks
+      
+      console.log('📊 Redis fetch results (first keys only):', {
+        movies: redisMovies.status,
+        tvshows: redisTVShows.status,
+        books: redisBooks.status
+      })
+      
+      // Check if Redis data is available for each type
+      const hasRedisMovies = redisMovies.status === 'fulfilled' && redisMovies.value
+      const hasRedisTVShows = redisTVShows.status === 'fulfilled' && redisTVShows.value
+      const hasRedisBooks = redisBooks.status === 'fulfilled' && redisBooks.value
+      
+      console.log('📊 Redis data availability (first keys only):', {
+        movies: hasRedisMovies && Array.isArray(redisMovies.value) ? redisMovies.value.length : 'missing',
+        tvshows: hasRedisTVShows && Array.isArray(redisTVShows.value) ? redisTVShows.value.length : 'missing',
+        books: hasRedisBooks && Array.isArray(redisBooks.value) ? redisBooks.value.length : 'missing'
+      })
+      
+      // Use Redis data where available, fall back to APIs for missing data
+      if (hasRedisMovies && hasRedisTVShows && hasRedisBooks) {
+        // All Redis data is available - use first keys only
+        console.log('✅ Using Redis data for all media types (first keys only)')
+        movies = Array.isArray(redisMovies.value) ? redisMovies.value : []
+        tvShows = Array.isArray(redisTVShows.value) ? redisTVShows.value : []
+        books = Array.isArray(redisBooks.value) ? redisBooks.value : []
+      } else {
+        // Some Redis data is missing, fetch missing data from APIs
+        console.log('⚠️ Some Redis data missing, fetching missing data from APIs...')
+        
+        // Use Redis data where available, fetch from APIs where missing, and ensure arrays (not null)
+        // For fallback API calls, only fetch 60 items to keep data manageable
+        movies = hasRedisMovies && Array.isArray(redisMovies.value) ? redisMovies.value : await fetchPopularMoviesWithFetch(tmdbApiKey, 3, baseUrl) || []
+        tvShows = hasRedisTVShows && Array.isArray(redisTVShows.value) ? redisTVShows.value : await fetchPopularTVShowsWithFetch(tmdbApiKey, 3, baseUrl) || []
+        books = hasRedisBooks && Array.isArray(redisBooks.value) ? redisBooks.value : await fetchBestsellersWithFetch(googleBooksApiKey, nyTimesApiKey, baseUrl) || []
+        
+        // Limit fallback API data to 60 items maximum
+        if (!hasRedisMovies && movies && movies.length > 60) {
+          movies = movies.slice(0, 60);
+          console.log('📊 Limited fallback movies to 60 items');
+        }
+        if (!hasRedisTVShows && tvShows && tvShows.length > 60) {
+          tvShows = tvShows.slice(0, 60);
+          console.log('📊 Limited fallback TV shows to 60 items');
+        }
+        if (!hasRedisBooks && books && books.length > 60) {
+          books = books.slice(0, 60);
+          console.log('📊 Limited fallback books to 60 items');
+        }
+        
+        if (!hasRedisMovies && !movies) movies = fallbackMovies
+        if (!hasRedisTVShows && !tvShows) tvShows = fallbackTVShows
+        if (!hasRedisBooks && !books) books = fallbackBooks
+      }
     }
   } catch (error) {
     console.error('❌ Error fetching initial data:', error)
-    // Use fallback data if all methods fail
-    movies = fallbackMovies
-    tvShows = fallbackTVShows
-    books = fallbackBooks
+    // Use fallback data if all methods fail, but limit to 60 items maximum
+    movies = fallbackMovies.slice(0, 60)
+    tvShows = fallbackTVShows.slice(0, 60)
+    books = fallbackBooks.slice(0, 60)
+    console.log('📊 Using limited fallback data (60 items max per type)')
   }
 
   console.log('📊 Final data counts:', {
@@ -120,7 +316,7 @@ export default async function Home() {
       
       {/* Content */}
       <div className="relative z-10">
-        <Navigation />
+        <ClientNavigation />
         <main>
           <ContentSection 
             initialMovies={movies}
@@ -128,11 +324,12 @@ export default async function Home() {
             initialBooks={books}
             tmdbApiKey={tmdbApiKey}
             googleBooksApiKey={googleBooksApiKey}
+            redisKeysFetched={redisKeysFetched}
+          />
+          <MediaDetailsModal 
+            omdbApiKeys={omdbApiKeys}
           />
         </main>
-        
-        {/* Global Modal */}
-        <MediaDetailsModal omdbApiKeys={omdbApiKeys} />
       </div>
     </div>
   )

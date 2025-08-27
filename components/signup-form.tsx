@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -15,6 +15,9 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PasswordInput } from "@/components/ui/password-input"
+import { validateSignup, validatePassword } from "@/lib/validation"
+import { PasswordStrengthIndicator } from "@/components/password-strength-indicator"
 
 export function SignupForm({
   className,
@@ -26,22 +29,45 @@ export function SignupForm({
   const [confirmPassword, setConfirmPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [passwordStrength, setPasswordStrength] = useState<'weak' | 'medium' | 'strong'>('weak')
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
   const router = useRouter()
+
+  // Real-time password strength calculation
+  useEffect(() => {
+    if (password) {
+      const validation = validatePassword(password)
+      setPasswordStrength(validation.strength)
+    }
+  }, [password])
+
+  // Mark field as touched when user interacts with it
+  const handleFieldBlur = (fieldName: string) => {
+    setTouched(prev => ({ ...prev, [fieldName]: true }))
+  }
+
+  // Validate individual field
+  const validateField = (fieldName: string, value: string) => {
+    const validation = validateSignup({ name, email, password, confirmPassword })
+    if (validation.errors[fieldName]) {
+      setFieldErrors(prev => ({ ...prev, [fieldName]: validation.errors[fieldName] }))
+    } else {
+      setFieldErrors(prev => ({ ...prev, [fieldName]: "" }))
+    }
+  }
 
   const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
+    setFieldErrors({})
 
-    // Basic validation
-    if (password !== confirmPassword) {
-      setError("Passwords do not match")
-      setIsLoading(false)
-      return
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long")
+    // Comprehensive validation
+    const validation = validateSignup({ name, email, password, confirmPassword })
+    
+    if (!validation.isValid) {
+      setFieldErrors(validation.errors)
       setIsLoading(false)
       return
     }
@@ -65,19 +91,8 @@ export function SignupForm({
         throw new Error(data.error || "Failed to create account")
       }
 
-      // Sign in the user after successful signup
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      })
-
-      if (result?.error) {
-        setError("Account created but sign-in failed. Please try signing in.")
-      } else {
-        router.push("/")
-        router.refresh()
-      }
+      // Redirect to verification pending page
+      router.push(`/verification-pending?email=${encodeURIComponent(email)}`)
     } catch (error) {
       setError(error instanceof Error ? error.message : "An error occurred. Please try again.")
     } finally {
@@ -125,8 +140,8 @@ export function SignupForm({
                 </Button>
               </div>
               <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
-                <span className="bg-card text-muted-foreground relative z-10 px-2">
-                  Or continue with email
+                <span className="bg-surface text-muted-foreground relative z-10 px-2">
+                  Or continue with
                 </span>
               </div>
               <div className="grid gap-6">
@@ -138,49 +153,70 @@ export function SignupForm({
                     placeholder="John Doe"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    onBlur={() => handleFieldBlur('name')}
                     required
                     disabled={isLoading}
+                    className={touched.name && fieldErrors.name ? "border-red-500" : ""}
                   />
+                                       {touched.name && fieldErrors.name && (
+                       <p className="text-sm" style={{ color: 'var(--error-color)' }}>{fieldErrors.name}</p>
+                     )}
                 </div>
                 <div className="grid gap-3">
                   <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
                     type="email"
-                    placeholder="m@example.com"
+                    placeholder="user@domain.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    onBlur={() => handleFieldBlur('email')}
                     required
                     disabled={isLoading}
+                    className={touched.email && fieldErrors.email ? "border-red-500" : ""}
                   />
+                  {touched.email && fieldErrors.email && (
+                    <p className="text-sm text-red-700 dark:text-red-400">{fieldErrors.email}</p>
+                  )}
                 </div>
                 <div className="grid gap-3">
                   <Label htmlFor="password">Password</Label>
-                  <Input 
+                  <PasswordInput 
                     id="password" 
-                    type="password" 
                     value={password}
+                    placeholder="••••••••••••"
                     onChange={(e) => setPassword(e.target.value)}
+                    onBlur={() => handleFieldBlur('password')}
                     required 
                     disabled={isLoading}
+                    className={touched.password && fieldErrors.password ? "border-red-500" : ""}
                   />
+                  {password && <PasswordStrengthIndicator strength={passwordStrength} />}
+                  {touched.password && fieldErrors.password && (
+                    <p className="text-sm text-red-700 dark:text-red-400">{fieldErrors.password}</p>
+                  )}
                 </div>
                 <div className="grid gap-3">
                   <Label htmlFor="confirmPassword">Confirm Password</Label>
-                  <Input 
+                  <PasswordInput 
                     id="confirmPassword" 
-                    type="password" 
                     value={confirmPassword}
+                    placeholder="••••••••••••"
                     onChange={(e) => setConfirmPassword(e.target.value)}
+                    onBlur={() => handleFieldBlur('confirmPassword')}
                     required 
                     disabled={isLoading}
+                    className={touched.confirmPassword && fieldErrors.confirmPassword ? "border-red-500" : ""}
                   />
+                  {touched.confirmPassword && fieldErrors.confirmPassword && (
+                    <p className="text-sm text-red-700 dark:text-red-400">{fieldErrors.confirmPassword}</p>
+                  )}
                 </div>
-                {error && (
-                  <div className="text-sm text-red-600 text-center">
-                    {error}
-                  </div>
-                )}
+                                     {error && (
+                       <div className="text-sm text-center" style={{ color: 'var(--error-color)' }}>
+                         {error}
+                       </div>
+                     )}
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Creating account..." : "Create account"}
                 </Button>

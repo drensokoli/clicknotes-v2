@@ -25,6 +25,7 @@
   --border: #e2e8f0;
   --muted: #64748b;
   --muted-foreground: #475569;
+  --error-color: #dc2626;
 }
 
 [data-theme="dark"] {
@@ -62,6 +63,7 @@
   --border: var(--clr-surface-20);
   --muted: var(--clr-surface-40);
   --muted-foreground: var(--clr-surface-50);
+  --error-color: #f87171;
 }
 
 @theme inline {
@@ -74,6 +76,7 @@
   --color-border: var(--border);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-error: var(--error-color);
   --font-sans: Arial, Helvetica, sans-serif;
   --font-mono: "Courier New", Courier, monospace;
 }

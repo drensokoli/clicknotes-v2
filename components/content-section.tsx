@@ -16,6 +16,12 @@ interface ContentSectionProps {
   initialBooks: Book[]
   tmdbApiKey: string
   googleBooksApiKey: string
+  // Progressive loading props
+  redisKeysFetched?: {
+    movies: number
+    tvshows: number
+    books: number
+  }
 }
 
 export function ContentSection({ 
@@ -23,7 +29,8 @@ export function ContentSection({
   initialTVShows, 
   initialBooks, 
   tmdbApiKey, 
-  googleBooksApiKey 
+  googleBooksApiKey,
+  redisKeysFetched = { movies: 1, tvshows: 1, books: 1 }
 }: ContentSectionProps) {
   const { setTmdbApiKey } = useModal()
   
@@ -43,42 +50,141 @@ export function ContentSection({
     books: 20
   })
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingNextPage, setIsLoadingNextPage] = useState(false)
   const debounceTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
-
-  // Handle infinite scroll
-  const loadMore = () => {
-    if (isLoading || searchQuery) {
-      console.log('🚫 LoadMore blocked:', { isLoading, searchQuery: !!searchQuery });
+  
+  // Progressive loading state
+  const [currentRedisKeys, setCurrentRedisKeys] = useState(redisKeysFetched)
+  const [allMediaData, setAllMediaData] = useState({
+    movies: initialMovies,
+    tvshows: initialTVShows,
+    books: initialBooks
+  })
+  
+  // Function to fetch next Redis key for progressive loading
+  const fetchNextRedisKey = async (mediaType: Section) => {
+    if (isLoadingNextPage || searchQuery) {
       return;
     }
     
-    console.log('📈 Loading more content for:', activeSection);
+    const nextKeyNumber = currentRedisKeys[mediaType] + 1;
+    
+    setIsLoadingNextPage(true);
+    
+    try {
+      const response = await fetch(`/api/redisHandler?type=${mediaType}${nextKeyNumber}`);
+      
+      if (response.ok) {
+        const newData = await response.json();
+        
+        if (Array.isArray(newData) && newData.length > 0) {
+          // Update all states in the correct order
+          setAllMediaData(prev => {
+            const updatedData = {
+              ...prev,
+              [mediaType]: [...prev[mediaType], ...newData]
+            };
+            return updatedData;
+          });
+          
+          setCurrentRedisKeys(prev => {
+            const updatedKeys = {
+              ...prev,
+              [mediaType]: nextKeyNumber
+            };
+            return updatedKeys;
+          });
+          
+          // Update display count to show the new items
+          setDisplayCounts(prev => {
+            const newCount = prev[mediaType] + 20;
+            return {
+              ...prev,
+              [mediaType]: newCount
+            };
+          });
+          
+        } else {
+          // If no data returned, we've reached the end of available Redis keys
+          // Mark this as the last key to prevent further fetching attempts
+          setCurrentRedisKeys(prev => {
+            const updatedKeys = {
+              ...prev,
+              [mediaType]: nextKeyNumber // Mark this as the last key fetched
+            };
+            return updatedKeys;
+          });
+        }
+      } else if (response.status === 404) {
+        // Key doesn't exist, we've reached the end
+        setCurrentRedisKeys(prev => {
+          const updatedKeys = {
+            ...prev,
+            [mediaType]: nextKeyNumber // Mark this as the last key fetched
+          };
+          return updatedKeys;
+        });
+      }
+    } catch (error) {
+      console.error(`❌ Error fetching ${mediaType}${nextKeyNumber}:`, error);
+      // On error, also mark as end to prevent infinite retries
+      setCurrentRedisKeys(prev => {
+        const updatedKeys = {
+          ...prev,
+          [mediaType]: nextKeyNumber
+        };
+        return updatedKeys;
+      });
+    } finally {
+      setIsLoadingNextPage(false);
+    }
+  };
+
+  // Handle infinite scroll with progressive loading
+  const loadMore = async () => {
+    if (isLoading || isLoadingNextPage || searchQuery) {
+      return;
+    }
+    
+    const currentData = allMediaData[activeSection];
+    const currentDisplayCount = displayCounts[activeSection];
+    
+    // Check if we need to fetch the next Redis key
+    if (currentDisplayCount >= currentData.length) {
+      // Check if we've already fetched all available Redis keys
+      const maxRedisKeys = activeSection === 'books' ? 4 : 6; // Books have 4 keys, movies/TV shows have 6
+      if (currentRedisKeys[activeSection] >= maxRedisKeys) {
+        return;
+      }
+      
+      fetchNextRedisKey(activeSection);
+      return;
+    }
+    
+    // Load 20 more items from current data
     setIsLoading(true);
     
-    // Add a delay to make infinite scroll smoother
     setTimeout(() => {
-      setDisplayCounts(prev => {
-        const newCount = prev[activeSection] + 20;
-        console.log(`📊 Updated ${activeSection} count from ${prev[activeSection]} to ${newCount}`);
-        return {
-          ...prev,
-          [activeSection]: newCount
-        };
-      });
+      setDisplayCounts(prev => ({
+        ...prev,
+        [activeSection]: prev[activeSection] + 20
+      }));
       setIsLoading(false);
-    }, 300); // 300ms delay for smoother experience
+    }, 300);
   };
 
   // Set up intersection observer for infinite scroll
   useEffect(() => {
     // Only set up observer when not searching and component is initialized
-    if (searchQuery || !isInitialized) return;
+    if (searchQuery || !isInitialized) {
+      return;
+    }
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !isLoading) {
-          console.log('🔄 Infinite scroll triggered for:', activeSection);
+        
+        if (entries[0].isIntersecting && !isLoading && !isLoadingNextPage) {
           loadMore();
         }
       },
@@ -92,7 +198,6 @@ export function ContentSection({
     const timer = setTimeout(() => {
       if (loadMoreRef.current) {
         observer.observe(loadMoreRef.current);
-        console.log('👁️ Observer attached to:', loadMoreRef.current);
       }
     }, 100);
 
@@ -100,7 +205,7 @@ export function ContentSection({
       clearTimeout(timer);
       observer.disconnect();
     };
-  }, [activeSection, isLoading, searchQuery, isInitialized]);
+  }, [activeSection, isLoading, isLoadingNextPage, searchQuery, isInitialized, displayCounts, allMediaData]);
 
   useEffect(() => {
     // Check initial hash
@@ -180,13 +285,13 @@ export function ContentSection({
       const currentDisplayCount = displayCounts[activeSection];
       switch (activeSection) {
         case "movies":
-          return initialMovies.slice(0, currentDisplayCount).map(movie => ({ ...movie, type: "movie" as const }))
+          return allMediaData.movies.slice(0, currentDisplayCount).map(movie => ({ ...movie, type: "movie" as const }))
         case "tvshows":
-          return initialTVShows.slice(0, currentDisplayCount).map(tv => ({ ...tv, type: "tvshow" as const }))
+          return allMediaData.tvshows.slice(0, currentDisplayCount).map(tv => ({ ...tv, type: "tvshow" as const }))
         case "books":
-          return initialBooks.slice(0, currentDisplayCount).map(book => ({ ...book, type: "book" as const }))
+          return allMediaData.books.slice(0, currentDisplayCount).map(book => ({ ...book, type: "book" as const }))
         default:
-          return initialMovies.slice(0, currentDisplayCount).map(movie => ({ ...movie, type: "movie" as const }))
+          return allMediaData.movies.slice(0, currentDisplayCount).map(movie => ({ ...movie, type: "movie" as const }))
       }
     })()
 
@@ -457,16 +562,6 @@ export function ContentSection({
           return validItems;
         })()
           .map((item, index) => {
-            // Debug logging for problematic items
-            if (process.env.NODE_ENV === 'development' && index === 21) {
-              console.log(`🚨 22nd item (index 21):`, {
-                item,
-                type: item?.type,
-                id: item?.id,
-                hasVolumeInfo: item?.type === 'book' ? !!item.volumeInfo : 'N/A'
-              });
-            }
-            
             // Calculate animation delay based on position in current page, not total index
             // Only animate the first 20 items initially, and new items when loaded
             const currentDisplayCount = displayCounts[activeSection];
@@ -502,22 +597,26 @@ export function ContentSection({
         </div>
       )}
 
+      {/* Progressive Loading Indicator */}
+      {isLoadingNextPage && (
+        <div className="flex items-center justify-center py-8">
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        </div>
+      )}
+
+
       {/* Infinite Scroll Trigger */}
       {!searchQuery && (() => {
-        const totalItems = activeSection === "movies" ? initialMovies.length : 
-                          activeSection === "tvshows" ? initialTVShows.length : 
-                          initialBooks.length
+        const totalItems = allMediaData[activeSection].length;
         const currentDisplayCount = displayCounts[activeSection];
-        const shouldShowTrigger = currentDisplayCount < totalItems;
+        const maxRedisKeys = activeSection === 'books' ? 4 : 6;
+        const hasReachedMaxKeys = currentRedisKeys[activeSection] >= maxRedisKeys;
         
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🎯 Infinite scroll trigger:', {
-            activeSection,
-            currentDisplayCount,
-            totalItems,
-            shouldShowTrigger
-          });
-        }
+        // Show trigger if we haven't displayed all current items or haven't reached max Redis keys
+        const shouldShowTrigger = currentDisplayCount < totalItems || 
+                                (currentDisplayCount >= totalItems && !hasReachedMaxKeys);
         
         return shouldShowTrigger && (
           <div 

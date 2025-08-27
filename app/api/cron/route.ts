@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from "@redis/client"
 import { fetchJSON } from '../../../lib/secure-fetch'
+import { sendEmail } from '../../../lib/email-service'
 
 // Helper function to create Redis client
 const createRedisClient = () => {
@@ -10,6 +11,26 @@ const createRedisClient = () => {
 
   if (!redisHost || !redisPassword || !redisPort) {
     throw new Error('Redis configuration missing')
+  }
+
+  return createClient({
+    password: redisPassword,
+    username: "default",
+    socket: {
+      host: redisHost,
+      port: parseInt(redisPort)
+    }
+  })
+}
+
+// Helper function to create backup Redis client
+const createRedisClient2 = () => {
+  const redisHost = process.env.REDIS_HOST_2
+  const redisPassword = process.env.REDIS_PASSWORD_2
+  const redisPort = process.env.REDIS_PORT_2
+
+  if (!redisHost || !redisPassword || !redisPort) {
+    throw new Error('Backup Redis configuration missing')
   }
 
   return createClient({
@@ -32,8 +53,8 @@ const isEroticContent = (title: string, description: string) => {
     'nudity', 'explicit', 'mature', 'softcore',
     'hardcore', 'xxx', 'erotica', 'sensual',
     'intimate', 'romance novel', 'adult romance',
-    'adult entertainment', 'mature film', 'adult cinema', 'adult film', 'adult movie',
-    'sultry', 'seduct', 'seduce', 'kinky', 'flirt'
+    'mature film', 'adult cinema', 'adult film', 'adult movie',
+    'sultry', 'seduct', 'seduce', 'kinky', 'flirt', 'lude'
   ];
   
   // Check if any erotic keywords are in the description or title
@@ -51,7 +72,7 @@ const isEroticContent = (title: string, description: string) => {
 
 // Helper function to check if content meets quality standards
 const meetsQualityStandards = (rating: number, voteCount: number) => {
-  // Must have rating >= 6.5
+  // Must have rating >= 6.0
   if (rating < 6.0) return false;
   
   // Must have at least 100 votes to ensure rating reliability
@@ -72,7 +93,7 @@ async function clearRedisData(client: any, dataType: string) {
 }
 
 // Helper function to store data in Redis with automatic size reduction
-async function storeInRedisWithFallback(client: any, key: string, data: any[], initialLimit: number = 220) {
+async function storeInRedisWithFallback(client: any, key: string, data: any[], initialLimit: number = 240) {
   let currentLimit = initialLimit;
   let attempts = 0;
   const maxAttempts = 10; // Prevent infinite loops
@@ -579,7 +600,7 @@ async function fetchBookWithDetails(book: any, googleBooksApiKey: string) {
   }
 }
 
-// Populate movies with all 20 pages (like server-side)
+// Populate movies with immediate filtering (more efficient)
 async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[]) {
   console.log('[POPULATE] Starting movies population...');
   console.log('[POPULATE] Configuration:', {
@@ -589,7 +610,7 @@ async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[]) {
     omdbKeysAvailable: omdbApiKeys.filter(k => !!k).length,
     omdbKeys: omdbApiKeys.map((k, i) => ({ index: i, hasKey: !!k, keyLength: k?.length || 0 }))
   });
-  console.log('[POPULATE] Fetching all 20 pages of popular movies...');
+  console.log('[POPULATE] Fetching movies with immediate filtering until we have 240...');
   
   const client = createRedisClient()
   console.log('[POPULATE] Redis client created, connecting...');
@@ -597,10 +618,11 @@ async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[]) {
   console.log('[POPULATE] Redis connected successfully');
   
   try {
-    const allMovies = [];
+    const filteredMovies = [];
     const seenIds = new Set();
+    let totalProcessed = 0;
     
-    // Fetch all 20 pages like in server-side
+    // Fetch movies page by page until we have 240 filtered movies
     for (let page = 1; page <= 20; page++) {
       console.log(`[POPULATE] Fetching movies page ${page}/20...`);
       
@@ -623,23 +645,41 @@ async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[]) {
           });
           
           for (let i = 0; i < moviesData.results.length; i++) {
-            // Stop if we've reached 240 movies
-            if (allMovies.length >= 240) {
-              console.log(`[POPULATE] Reached 240 movies limit, stopping collection`);
+            // Stop if we've reached 240 filtered movies
+            if (filteredMovies.length >= 240) {
+              console.log(`[POPULATE] Reached 240 filtered movies, stopping collection`);
               break;
             }
             
             const movie = moviesData.results[i];
-            console.log(`[POPULATE] Processing movie ${i + 1}/${moviesData.results.length} on page ${page}: ${movie.title} (ID: ${movie.id})`);
+            totalProcessed++;
+            console.log(`[POPULATE] Processing movie ${totalProcessed}: ${movie.title} (ID: ${movie.id})`);
             
             if (!seenIds.has(movie.id)) {
               seenIds.add(movie.id);
-              console.log(`[POPULATE] New unique movie found: ${movie.title} (ID: ${movie.id})`);
+              
+              // Check filters immediately for this movie
+              const description = (movie.overview || '').toLowerCase();
+              const title = (movie.title || '').toLowerCase();
+              
+              // Filter out erotic content
+              if (isEroticContent(title, description)) {
+                console.log(`[POPULATE] ❌ Filtered out erotic movie: ${movie.title}`);
+                continue; // Skip this movie and move to next
+              }
+              
+              // Filter out low-quality movies (optional - you can uncomment if needed)
+              if (!meetsQualityStandards(movie.vote_average, movie.vote_count || 0)) {
+                console.log(`[POPULATE] ❌ Filtered out low-quality movie: ${movie.title} (rating: ${movie.vote_average}, votes: ${movie.vote_count})`);
+                continue; // Skip this movie and move to next
+              }
+              
+              console.log(`[POPULATE] ✅ Movie ${movie.title} passed filters, fetching details...`);
               
               const movieWithDetails = await fetchMovieWithDetails(movie, tmdbApiKey, omdbApiKeys);
-              allMovies.push(movieWithDetails);
+              filteredMovies.push(movieWithDetails);
               
-              console.log(`[POPULATE] Movie ${movie.title} processed and added to collection. Total so far: ${allMovies.length}`);
+              console.log(`[POPULATE] ✅ Movie ${movie.title} processed and added to collection. Total filtered: ${filteredMovies.length}/240`);
               
               // Add delay between individual movie detail fetches
               console.log(`[POPULATE] Waiting 2 seconds before next movie...`);
@@ -650,8 +690,8 @@ async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[]) {
           }
           
           // Stop processing pages if we've reached the limit
-          if (allMovies.length >= 240) {
-            console.log(`[POPULATE] Reached 240 movies limit, stopping page processing`);
+          if (filteredMovies.length >= 240) {
+            console.log(`[POPULATE] Reached 240 filtered movies, stopping page processing`);
             break;
           }
         } else {
@@ -678,36 +718,13 @@ async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[]) {
       }
     }
     
-    console.log(`[POPULATE] Total unique movies collected: ${allMovies.length}`);
+    console.log(`[POPULATE] Total movies processed: ${totalProcessed}`);
+    console.log(`[POPULATE] Total movies after filtering: ${filteredMovies.length}`);
     
-    // Filter out erotic content and low-quality movies
-    console.log(`[POPULATE] Filtering movies for erotic content and quality...`);
-    const filteredMovies = allMovies.filter((movie: any) => {
-      // Filter out movies that don't meet quality standards
-      // if (!meetsQualityStandards(movie.vote_average, movie.vote_count || 0)) {
-      //   return false;
-      // }
-      
-      // Filter out erotic content
-      const description = (movie.overview || '').toLowerCase();
-      const title = (movie.title || '').toLowerCase();
-      const genreIds = movie.genre_ids || [];
-      
-      if (isEroticContent(title, description)) {
-        console.log(`[POPULATE] Filtered out erotic movie: ${movie.title}`);
-        return false;
-      }
-      
-      return true;
-    });
+    // Ensure we have exactly 240 movies (slice if we somehow got more)
+    const finalMovies = filteredMovies.slice(0, 240);
     
-    console.log(`[POPULATE] After filtering: ${filteredMovies.length} movies`);
-    
-    // Adjust count to be divisible by 20
-    const targetCount = Math.floor(filteredMovies.length / 20) * 20;
-    const finalMovies = filteredMovies.slice(0, targetCount);
-    
-    console.log(`[POPULATE] Final count adjusted to be divisible by 20: ${finalMovies.length} movies`);
+    console.log(`[POPULATE] Final count sliced to 240: ${finalMovies.length} movies`);
     console.log(`[POPULATE] Movies collection structure:`, {
       totalCount: finalMovies.length,
       hasMovies: finalMovies.length > 0,
@@ -721,17 +738,59 @@ async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[]) {
       } : null
     });
     
-    // Store in Redis with automatic size reduction if needed
-    console.log(`[POPULATE] Storing final movies in Redis (count: ${finalMovies.length})...`);
-    const storedMovies = await storeInRedisWithFallback(client, 'movies', finalMovies, finalMovies.length);
+    // Store paginated movies in Redis (6 groups of 40 = 240 total)
+    console.log(`[POPULATE] Storing paginated movies in Redis (6 groups of 40 = 240 total)...`);
     
-    return storedMovies;
+    // Create paginated keys: movies1, movies2, movies3, movies4, movies5, movies6
+    // Each group has exactly 40 items
+    const movies1 = finalMovies.slice(0, 40);
+    const movies2 = finalMovies.slice(40, 80);
+    const movies3 = finalMovies.slice(80, 120);
+    const movies4 = finalMovies.slice(120, 160);
+    const movies5 = finalMovies.slice(160, 200);
+    const movies6 = finalMovies.slice(200, 240);
+    
+    console.log(`[POPULATE] Paginated movies: movies1(${movies1.length}), movies2(${movies2.length}), movies3(${movies3.length}), movies4(${movies4.length}), movies5(${movies5.length}), movies6(${movies6.length})`);
+    
+    // Store in both Redis databases
+    try {
+      // Store in primary Redis
+      await client.set('movies1', JSON.stringify(movies1));
+      await client.set('movies2', JSON.stringify(movies2));
+      await client.set('movies3', JSON.stringify(movies3));
+      await client.set('movies4', JSON.stringify(movies4));
+      await client.set('movies5', JSON.stringify(movies5));
+      await client.set('movies6', JSON.stringify(movies6));
+      console.log(`[POPULATE] ✅ Stored paginated movies in primary Redis`);
+      
+      // Store in backup Redis
+      const backupClient = createRedisClient2();
+      await backupClient.connect();
+      await backupClient.set('movies1', JSON.stringify(movies1));
+      await backupClient.set('movies2', JSON.stringify(movies2));
+      await backupClient.set('movies3', JSON.stringify(movies3));
+      await backupClient.set('movies4', JSON.stringify(movies4));
+      await backupClient.set('movies5', JSON.stringify(movies5));
+      await backupClient.set('movies6', JSON.stringify(movies6));
+      await backupClient.disconnect();
+      console.log(`[POPULATE] ✅ Stored paginated movies in backup Redis`);
+      
+    } catch (error) {
+      console.error(`[POPULATE] Error storing paginated movies:`, error);
+      await sendErrorNotification('movies', error, 'Storing paginated movies');
+    }
+    
+    return finalMovies;
   } catch (error) {
     console.error(`[POPULATE] Critical error in movies population:`, error);
     console.error(`[POPULATE] Error details:`, {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : 'No stack trace'
     });
+    
+    // Send error notification email
+    await sendErrorNotification('movies', error, 'Movies population process');
+    
     throw error;
   } finally {
     console.log(`[POPULATE] Disconnecting from Redis...`);
@@ -740,7 +799,7 @@ async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[]) {
   }
 }
 
-// Populate TV shows with all 20 pages (like server-side)
+// Populate TV shows with immediate filtering (more efficient)
 async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[]) {
   console.log('[POPULATE] Starting TV shows population...');
   console.log('[POPULATE] Configuration:', {
@@ -750,7 +809,7 @@ async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[]) {
     omdbKeysAvailable: omdbApiKeys.filter(k => !!k).length,
     omdbKeys: omdbApiKeys.map((k, i) => ({ index: i, hasKey: !!k, keyLength: k?.length || 0 }))
   });
-  console.log('[POPULATE] Fetching all 20 pages of popular TV shows...');
+  console.log('[POPULATE] Fetching TV shows with immediate filtering until we have 240...');
   
   const client = createRedisClient()
   console.log('[POPULATE] Redis client created, connecting...');
@@ -758,10 +817,11 @@ async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[]) {
   console.log('[POPULATE] Redis connected successfully');
   
   try {
-    const allTVShows = [];
+    const filteredTVShows = [];
     const seenIds = new Set();
+    let totalProcessed = 0;
     
-    // Fetch all 20 pages like in server-side
+    // Fetch TV shows page by page until we have 240 filtered shows
     for (let page = 1; page <= 20; page++) {
       console.log(`[POPULATE] Fetching TV shows page ${page}/20...`);
       
@@ -784,23 +844,41 @@ async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[]) {
           });
           
           for (let i = 0; i < tvShowsData.results.length; i++) {
-            // Stop if we've reached 240 TV shows
-            if (allTVShows.length >= 240) {
-              console.log(`[POPULATE] Reached 240 TV shows limit, stopping collection`);
+            // Stop if we've reached 240 filtered TV shows
+            if (filteredTVShows.length >= 240) {
+              console.log(`[POPULATE] Reached 240 filtered TV shows, stopping collection`);
               break;
             }
             
             const tvShow = tvShowsData.results[i];
-            console.log(`[POPULATE] Processing TV show ${i + 1}/${tvShowsData.results.length} on page ${page}: ${tvShow.name} (ID: ${tvShow.id})`);
+            totalProcessed++;
+            console.log(`[POPULATE] Processing TV show ${totalProcessed}: ${tvShow.name} (ID: ${tvShow.id})`);
             
             if (!seenIds.has(tvShow.id)) {
               seenIds.add(tvShow.id);
-              console.log(`[POPULATE] New unique TV show found: ${tvShow.name} (ID: ${tvShow.id})`);
+              
+              // Check filters immediately for this TV show
+              const description = (tvShow.overview || '').toLowerCase();
+              const title = (tvShow.name || '').toLowerCase();
+              
+              // Filter out erotic content
+              if (isEroticContent(title, description)) {
+                console.log(`[POPULATE] ❌ Filtered out erotic TV show: ${tvShow.name}`);
+                continue; // Skip this TV show and move to next
+              }
+              
+              // Filter out low-quality TV shows
+              if (!meetsQualityStandards(tvShow.vote_average, tvShow.vote_count || 0)) {
+                console.log(`[POPULATE] ❌ Filtered out low-quality TV show: ${tvShow.name} (rating: ${tvShow.vote_average}, votes: ${tvShow.vote_count})`);
+                continue; // Skip this TV show and move to next
+              }
+              
+              console.log(`[POPULATE] ✅ TV show ${tvShow.name} passed filters, fetching details...`);
               
               const tvShowWithDetails = await fetchTVShowWithDetails(tvShow, tmdbApiKey, omdbApiKeys);
-              allTVShows.push(tvShowWithDetails);
+              filteredTVShows.push(tvShowWithDetails);
               
-              console.log(`[POPULATE] TV show ${tvShow.name} processed and added to collection. Total so far: ${allTVShows.length}`);
+              console.log(`[POPULATE] ✅ TV show ${tvShow.name} processed and added to collection. Total filtered: ${filteredTVShows.length}/240`);
               
               // Add delay between individual TV show detail fetches
               console.log(`[POPULATE] Waiting 2 seconds before next TV show...`);
@@ -811,8 +889,8 @@ async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[]) {
           }
           
           // Stop processing pages if we've reached the limit
-          if (allTVShows.length >= 240) {
-            console.log(`[POPULATE] Reached 240 TV shows limit, stopping page processing`);
+          if (filteredTVShows.length >= 240) {
+            console.log(`[POPULATE] Reached 240 filtered TV shows, stopping page processing`);
             break;
           }
         } else {
@@ -839,36 +917,13 @@ async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[]) {
       }
     }
     
-    console.log(`[POPULATE] Total unique TV shows collected: ${allTVShows.length}`);
+    console.log(`[POPULATE] Total TV shows processed: ${totalProcessed}`);
+    console.log(`[POPULATE] Total TV shows after filtering: ${filteredTVShows.length}`);
     
-    // Filter out erotic content and low-quality TV shows
-    console.log(`[POPULATE] Filtering TV shows for erotic content and quality...`);
-    const filteredTVShows = allTVShows.filter((show: any) => {
-      // Filter out TV shows that don't meet quality standards
-      if (!meetsQualityStandards(show.vote_average, show.vote_count || 0)) {
-        return false;
-      }
-      
-      // Filter out erotic content
-      const description = (show.overview || '').toLowerCase();
-      const title = (show.name || '').toLowerCase();
-      const genreIds = show.genre_ids || [];
-      
-      if (isEroticContent(title, description)) {
-        console.log(`[POPULATE] Filtered out erotic TV show: ${show.name}`);
-        return false;
-      }
-      
-      return true;
-    });
+    // Ensure we have exactly 240 TV shows (slice if we somehow got more)
+    const finalTVShows = filteredTVShows.slice(0, 240);
     
-    console.log(`[POPULATE] After filtering: ${filteredTVShows.length} TV shows`);
-    
-    // Adjust count to be divisible by 20
-    const targetCount = Math.floor(filteredTVShows.length / 20) * 20;
-    const finalTVShows = filteredTVShows.slice(0, targetCount);
-    
-    console.log(`[POPULATE] Final count adjusted to be divisible by 20: ${finalTVShows.length} TV shows`);
+    console.log(`[POPULATE] Final count sliced to 240: ${finalTVShows.length} TV shows`);
     console.log(`[POPULATE] TV Shows collection structure:`, {
       totalCount: finalTVShows.length,
       hasTVShows: finalTVShows.length > 0,
@@ -882,17 +937,59 @@ async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[]) {
       } : null
     });
     
-    // Store in Redis with automatic size reduction if needed
-    console.log(`[POPULATE] Storing final TV shows in Redis (count: ${finalTVShows.length})...`);
-    const storedTVShows = await storeInRedisWithFallback(client, 'tvshows', finalTVShows, finalTVShows.length);
+    // Store paginated TV shows in Redis (6 groups of 40 = 240 total)
+    console.log(`[POPULATE] Storing paginated TV shows in Redis (6 groups of 40 = 240 total)...`);
     
-    return storedTVShows;
+    // Create paginated keys: tvshows1, tvshows2, tvshows3, tvshows4, tvshows5, tvshows6
+    // Each group has exactly 40 items
+    const tvshows1 = finalTVShows.slice(0, 40);
+    const tvshows2 = finalTVShows.slice(40, 80);
+    const tvshows3 = finalTVShows.slice(80, 120);
+    const tvshows4 = finalTVShows.slice(120, 160);
+    const tvshows5 = finalTVShows.slice(160, 200);
+    const tvshows6 = finalTVShows.slice(200, 240);
+    
+    console.log(`[POPULATE] Paginated TV shows: tvshows1(${tvshows1.length}), tvshows2(${tvshows2.length}), tvshows3(${tvshows3.length}), tvshows4(${tvshows4.length}), tvshows5(${tvshows5.length}), tvshows6(${tvshows6.length})`);
+    
+    // Store in both Redis databases
+    try {
+      // Store in primary Redis
+      await client.set('tvshows1', JSON.stringify(tvshows1));
+      await client.set('tvshows2', JSON.stringify(tvshows2));
+      await client.set('tvshows3', JSON.stringify(tvshows3));
+      await client.set('tvshows4', JSON.stringify(tvshows4));
+      await client.set('tvshows5', JSON.stringify(tvshows5));
+      await client.set('tvshows6', JSON.stringify(tvshows6));
+      console.log(`[POPULATE] ✅ Stored paginated TV shows in primary Redis`);
+      
+      // Store in backup Redis
+      const backupClient = createRedisClient2();
+      await backupClient.connect();
+      await backupClient.set('tvshows1', JSON.stringify(tvshows1));
+      await backupClient.set('tvshows2', JSON.stringify(tvshows2));
+      await backupClient.set('tvshows3', JSON.stringify(tvshows3));
+      await backupClient.set('tvshows4', JSON.stringify(tvshows4));
+      await backupClient.set('tvshows5', JSON.stringify(tvshows5));
+      await backupClient.set('tvshows6', JSON.stringify(tvshows6));
+      await backupClient.disconnect();
+      console.log(`[POPULATE] ✅ Stored paginated TV shows in backup Redis`);
+      
+    } catch (error) {
+      console.error(`[POPULATE] Error storing paginated TV shows:`, error);
+      await sendErrorNotification('tvshows', error, 'Storing paginated TV shows');
+    }
+    
+    return finalTVShows;
   } catch (error) {
     console.error(`[POPULATE] Critical error in TV shows population:`, error);
     console.error(`[POPULATE] Error details:`, {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : 'No stack trace'
     });
+    
+    // Send error notification email
+    await sendErrorNotification('tvshows', error, 'TV shows population process');
+    
     throw error;
   } finally {
     console.log(`[POPULATE] Disconnecting from Redis...`);
@@ -985,15 +1082,48 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
       console.log(`[POPULATE] Processing ISBN ${i + 1}/${allIsbns.length}: ${isbn}`);
       
       try {
-        // Use the current Google Books API key
-        const currentKey = googleBooksApiKey;
-        const googleBooksUrl = `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&key=${currentKey}`;
+        // Implement API key rotation for Google Books API
+        const googleBooksApiKeys = [
+          process.env.GOOGLE_BOOKS_API_KEY_1!,
+          process.env.GOOGLE_BOOKS_API_KEY_2!
+        ];
         
-        const googleData = await fetchJSON(googleBooksUrl);
+        let googleData = null;
+        let usedKeyIndex = 0;
+        
+        // Try each API key until one works
+        for (let keyIndex = 0; keyIndex < googleBooksApiKeys.length; keyIndex++) {
+          try {
+            const currentKey = googleBooksApiKeys[keyIndex];
+            const googleBooksUrl = `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&key=${currentKey}`;
+            
+            console.log(`[POPULATE] Trying Google Books API key ${keyIndex + 1} for ISBN ${isbn}`);
+            googleData = await fetchJSON(googleBooksUrl);
+            
+            if (googleData && googleData.items && googleData.items.length > 0) {
+              usedKeyIndex = keyIndex;
+              console.log(`[POPULATE] ✅ Google Books API key ${keyIndex + 1} successful for ISBN ${isbn}`);
+              break;
+            }
+          } catch (error) {
+            console.log(`[POPULATE] ⚠️ Google Books API key ${keyIndex + 1} failed for ISBN ${isbn}:`, error);
+            if (keyIndex === googleBooksApiKeys.length - 1) {
+              throw error; // All keys failed
+            }
+          }
+        }
         
         if (googleData && googleData.items && googleData.items.length > 0) {
           const googleBook = googleData.items[0];
-          console.log(`[POPULATE] Found Google Books data for ISBN ${isbn}: ${googleBook.volumeInfo?.title || 'Unknown Title'}`);
+          const bookTitle = googleBook.volumeInfo?.title;
+          
+          // Filter out books with no title
+          if (!bookTitle || bookTitle.trim().length === 0) {
+            console.log(`[POPULATE] ❌ Book filtered out (no title): ISBN ${isbn}`);
+            continue;
+          }
+          
+          console.log(`[POPULATE] Found Google Books data for ISBN ${isbn}: ${bookTitle}`);
           
           // Create a book object with the structure expected by the UI
           const bookWithDetails = {
@@ -1015,7 +1145,7 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
           };
           
           booksWithDetails.push(bookWithDetails);
-          console.log(`[POPULATE] Book ${googleBook.volumeInfo?.title || 'Unknown'} processed. Total: ${booksWithDetails.length}`);
+          console.log(`[POPULATE] Book "${bookTitle}" processed. Total: ${booksWithDetails.length}`);
         } else {
           console.log(`[POPULATE] No Google Books data found for ISBN ${isbn}`);
         }
@@ -1034,11 +1164,11 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
     
     console.log(`[POPULATE] Total books processed: ${booksWithDetails.length}`);
     
-    // Adjust count to be divisible by 20
-    const targetBookCount = Math.floor(booksWithDetails.length / 20) * 20;
+    // Ensure we have exactly 160 books (divisible by 40)
+    const targetBookCount = Math.floor(booksWithDetails.length / 40) * 40;
     const finalBooks = booksWithDetails.slice(0, targetBookCount);
     
-    console.log(`[POPULATE] Final book count adjusted to be divisible by 20: ${finalBooks.length} books`);
+    console.log(`[POPULATE] Final book count adjusted to be divisible by 40: ${finalBooks.length} books`);
     console.log(`[POPULATE] Books collection structure:`, {
       totalCount: finalBooks.length,
       hasBooks: finalBooks.length > 0,
@@ -1052,21 +1182,47 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
       } : null
     });
     
-    // Store in Redis
-    console.log(`[POPULATE] Storing ${finalBooks.length} books in Redis...`);
-    const booksJson = JSON.stringify(finalBooks);
-    console.log(`[POPULATE] Books JSON size: ${booksJson.length} characters`);
+    // Store paginated books in Redis (4 groups of 40 = 160 total)
+    console.log(`[POPULATE] Storing paginated books in Redis (4 groups of 40 = 160 total)...`);
     
-    await client.set('books', booksJson);
-    console.log(`[POPULATE] Successfully stored ${finalBooks.length} books in Redis`);
+    // Create paginated keys: books1, books2, books3, books4
+    // Each group has exactly 40 items
+    const books1 = finalBooks.slice(0, 40);
+    const books2 = finalBooks.slice(40, 80);
+    const books3 = finalBooks.slice(80, 120);
+    const books4 = finalBooks.slice(120, 160);
     
-    // Verify storage
-    const storedBooks = await client.get('books');
-    console.log(`[POPULATE] Redis verification:`, {
+    console.log(`[POPULATE] Created 4 book groups: books1(${books1.length}), books2(${books2.length}), books3(${books3.length}), books4(${books4.length})`);
+    
+    // Store in both Redis databases
+    try {
+      // Store in primary Redis
+      await client.set('books1', JSON.stringify(books1));
+      await client.set('books2', JSON.stringify(books2));
+      await client.set('books3', JSON.stringify(books3));
+      await client.set('books4', JSON.stringify(books4));
+      console.log(`[POPULATE] ✅ Stored 4 paginated book groups in primary Redis`);
+      
+      // Store in backup Redis
+      const backupClient = createRedisClient2();
+      await backupClient.connect();
+      await backupClient.set('books1', JSON.stringify(books1));
+      await backupClient.set('books2', JSON.stringify(books2));
+      await backupClient.set('books3', JSON.stringify(books3));
+      await backupClient.set('books4', JSON.stringify(books4));
+      await backupClient.disconnect();
+      console.log(`[POPULATE] ✅ Stored 4 paginated book groups in backup Redis`);
+      
+    } catch (error) {
+      console.error(`[POPULATE] Error storing paginated books:`, error);
+      await sendErrorNotification('books', error, 'Storing paginated books');
+    }
+    
+    // Verify storage of first group
+    const storedBooks = await client.get('books1');
+    console.log(`[POPULATE] Redis verification (books1):`, {
       hasStoredData: !!storedBooks,
-      storedDataLength: storedBooks?.length || 0,
-      storedDataType: typeof storedBooks,
-      matchesOriginal: storedBooks === booksJson
+      dataLength: storedBooks ? JSON.parse(storedBooks).length : 0
     });
     
     return finalBooks;
@@ -1076,11 +1232,112 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : 'No stack trace'
     });
+    
+    // Send error notification email
+    await sendErrorNotification('books', error, 'Books population process');
+    
     throw error;
   } finally {
     console.log(`[POPULATE] Disconnecting from Redis...`);
     await client.disconnect();
     console.log(`[POPULATE] Redis disconnected`);
+  }
+}
+
+// Helper function to send error notification emails
+async function sendErrorNotification(mediaType: string, error: any, operation: string) {
+  try {
+    const emailConfig = {
+      provider: 'resend' as const,
+      apiKey: process.env.RESEND_API_KEY,
+      fromEmail: process.env.FROM_EMAIL || 'noreply@clicknotes.com',
+      fromName: 'ClickNotes System'
+    };
+
+    if (!emailConfig.apiKey) {
+      console.error('[EMAIL] RESEND_API_KEY not configured, cannot send error notification');
+      return;
+    }
+
+    const subject = `🚨 ClickNotes Redis Population Failed - ${mediaType}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #dc2626;">Redis Population Failed</h2>
+        <p><strong>Media Type:</strong> ${mediaType}</p>
+        <p><strong>Operation:</strong> ${operation}</p>
+        <p><strong>Error:</strong> ${error instanceof Error ? error.message : String(error)}</p>
+        <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+        <p><strong>Stack Trace:</strong></p>
+        <pre style="background-color: #f3f4f6; padding: 10px; border-radius: 4px; overflow-x: auto;">
+          ${error instanceof Error ? error.stack : 'No stack trace available'}
+        </pre>
+        <p>Please check the server logs and Redis connection immediately.</p>
+        
+        <div style="margin: 30px 0; padding: 20px; background-color: #f8fafc; border-radius: 8px; border-left: 4px solid #3b82f6;">
+          <h3 style="color: #1e40af; margin-top: 0;">Quick Actions</h3>
+          <p style="margin-bottom: 20px;">You can manually retry the failed operation using these buttons:</p>
+          
+          ${mediaType === 'movies' || mediaType === 'general' ? `
+            <a href="https://yourdomain.com/retry-population" 
+               style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 10px 10px 0; font-weight: 500;">
+              🔄 Retry Movies Population
+            </a>
+          ` : ''}
+          
+          ${mediaType === 'tvshows' || mediaType === 'general' ? `
+            <a href="https://yourdomain.com/retry-population" 
+               style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 10px 10px 0; font-weight: 500;">
+              🔄 Retry TV Shows Population
+            </a>
+          ` : ''}
+          
+          ${mediaType === 'books' || mediaType === 'general' ? `
+            <a href="https://yourdomain.com/retry-population" 
+               style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 10px 10px 0; font-weight: 500;">
+              🔄 Retry Books Population
+            </a>
+          ` : ''}
+          
+          ${mediaType === 'general' ? `
+            <a href="https://yourdomain.com/retry-population" 
+               style="display: inline-block; background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 10px 10px 0; font-weight: 500;">
+              🚀 Retry All Media Types
+            </a>
+          ` : ''}
+          
+          <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
+            <strong>Note:</strong> Click any button above to open the retry page. You can then manually trigger the population process for the failed media type.
+          </p>
+        </div>
+        
+        <p>Best regards,<br>The ClickNotes System</p>
+      </div>
+    `;
+
+    const text = `
+      Redis Population Failed
+      
+      Media Type: ${mediaType}
+      Operation: ${operation}
+      Error: ${error instanceof Error ? error.message : String(error)}
+      Timestamp: ${new Date().toISOString()}
+      
+      Please check the server logs and Redis connection immediately.
+      
+      Best regards,
+      The ClickNotes System
+    `;
+
+    // Send to both email addresses
+    const recipients = ['drensokoli@gmail.com', 'sokolidren@gmail.com'];
+    
+    for (const recipient of recipients) {
+      await sendEmail(emailConfig, recipient, subject, html, text);
+      console.log(`[EMAIL] Error notification sent to ${recipient}`);
+    }
+    
+  } catch (emailError) {
+    console.error('[EMAIL] Failed to send error notification:', emailError);
   }
 }
 
@@ -1103,27 +1360,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ keys, message: 'Debug info' });
     }
 
-    if (type === 'movies') {
-      const data = await client.get('movies')
-      console.log('Movies from Redis:', {
+    if (type === 'movies1' || type === 'movies2' || type === 'movies3') {
+      const data = await client.get(type)
+      console.log(`${type} from Redis:`, {
         hasData: !!data,
         dataType: typeof data,
         length: data ? JSON.parse(data).length : 0
       });
       await client.disconnect()
       return NextResponse.json(data ? JSON.parse(data) : null)
-    } else if (type === 'tvshows') {
-      const data = await client.get('tvshows')
-      console.log('TV Shows from Redis:', {
+    } else if (type === 'tvshows1' || type === 'tvshows2' || type === 'tvshows3') {
+      const data = await client.get(type)
+      console.log(`${type} from Redis:`, {
         hasData: !!data,
         dataType: typeof data,
         length: data ? JSON.parse(data).length : 0
       });
       await client.disconnect()
       return NextResponse.json(data ? JSON.parse(data) : null)
-    } else if (type === 'books') {
-      const data = await client.get('books')
-      console.log('Books from Redis:', {
+    } else if (type && type.startsWith('books')) {
+      const data = await client.get(type)
+      console.log(`${type} from Redis:`, {
         hasData: !!data,
         dataType: typeof data,
         length: data ? JSON.parse(data).length : 0
@@ -1178,14 +1435,14 @@ export async function POST(request: NextRequest) {
     if (action === 'populate-all') {
       console.log('[POST] Starting complete data population...');
       
-    const tmdbApiKey = process.env.TMDB_API_KEY!
-    const googleBooksApiKey = process.env.GOOGLE_BOOKS_API_KEY_2!
-    const nyTimesApiKey = process.env.NYTIMES_API_KEY!
-    const omdbApiKeys = [
-      process.env.OMDB_API_KEY_1!,
-      process.env.OMDB_API_KEY_2!,
-      process.env.OMDB_API_KEY_3!,
-    ]
+      const tmdbApiKey = process.env.TMDB_API_KEY!
+      const googleBooksApiKey = process.env.GOOGLE_BOOKS_API_KEY_2!
+      const nyTimesApiKey = process.env.NYTIMES_API_KEY!
+      const omdbApiKeys = [
+        process.env.OMDB_API_KEY_1!,
+        process.env.OMDB_API_KEY_2!,
+        process.env.OMDB_API_KEY_3!,
+      ]
 
       console.log('[POST] API Keys available:', {
         tmdb: !!tmdbApiKey,
@@ -1198,21 +1455,34 @@ export async function POST(request: NextRequest) {
         omdbKeys: omdbApiKeys.map((k, i) => ({ index: i, hasKey: !!k, keyLength: k?.length || 0 }))
       });
 
-      // Populate all data types
-      console.log('[POST] Starting parallel population of all data types...');
+      // Populate movies and books in parallel (different APIs, no rate limiting conflict)
+      console.log('[POST] Starting parallel population of movies and books...');
       const startTime = Date.now();
       
-      const [movies, tvShows, books] = await Promise.all([
+      const [movies, books] = await Promise.all([
         populateMovies(tmdbApiKey, omdbApiKeys),
-        populateTVShows(tmdbApiKey, omdbApiKeys),
         populateBooks(googleBooksApiKey, nyTimesApiKey)
       ]);
       
+      console.log('[POST] Movies and books population completed!');
+      console.log('[POST] Movies count:', movies.length);
+      console.log('[POST] Books count:', books.length);
+      
+      // Now populate TV shows (after movies finish to avoid TMDB rate limiting)
+      console.log('[POST] Starting TV shows population (after movies to avoid TMDB rate limiting)...');
+      const tvShowsStartTime = Date.now();
+      
+      const tvShows = await populateTVShows(tmdbApiKey, omdbApiKeys);
+      
+      const tvShowsEndTime = Date.now();
+      const tvShowsDuration = tvShowsEndTime - tvShowsStartTime;
+      
       const endTime = Date.now();
-      const duration = endTime - startTime;
+      const totalDuration = endTime - startTime;
       
       console.log('[POST] Complete data population finished!');
-      console.log('[POST] Population duration:', `${duration}ms (${Math.round(duration / 1000)}s)`);
+      console.log('[POST] Total population duration:', `${totalDuration}ms (${Math.round(totalDuration / 1000)}s)`);
+      console.log('[POST] TV shows population duration:', `${tvShowsDuration}ms (${Math.round(tvShowsDuration / 1000)}s)`);
       console.log('[POST] Final counts:', {
         movies: movies.length,
         tvShows: tvShows.length,
@@ -1224,7 +1494,8 @@ export async function POST(request: NextRequest) {
         movies: movies.length,
         tvshows: tvShows.length,
         books: books.length,
-        duration: `${duration}ms`
+        totalDuration: `${totalDuration}ms`,
+        tvShowsDuration: `${tvShowsDuration}ms`
       };
       
       console.log('[POST] Sending response:', response);
@@ -1337,6 +1608,9 @@ export async function POST(request: NextRequest) {
       stack: error instanceof Error ? error.stack : 'No stack trace',
       requestUrl: request.url
     });
+    
+    // Send error notification email for general population failure
+    await sendErrorNotification('general', error, 'General population process');
     
     return NextResponse.json({ 
       error: 'Failed to populate data',
