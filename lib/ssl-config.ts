@@ -51,7 +51,6 @@ export function configureNodeSSL() {
 
 // Get fetch options with SSL configuration
 export function getFetchOptionsWithSSL(options: RequestInit = {}): RequestInit {
-  const sslConfig = getSSLConfig();
   
   return {
     ...options,

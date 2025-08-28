@@ -1,10 +1,44 @@
 // Alternative fetch-based API helpers for better SSL handling
 import { fetchJSON } from './secure-fetch';
+import type { Movie, TVShow, Book } from '@/components/media-card';
+
+// Interfaces for API responses
+interface NYTimesBook {
+  primary_isbn13: string;
+  title: string;
+  author: string;
+  description: string;
+  rank: number;
+  weeks_on_list: number;
+}
+
+interface GoogleBooksVolumeInfo {
+  title: string;
+  authors?: string[];
+  description?: string;
+  publishedDate?: string;
+  pageCount?: number;
+  averageRating?: number;
+  imageLinks?: {
+    thumbnail?: string;
+    smallThumbnail?: string;
+  };
+  previewLink?: string;
+  infoLink?: string;
+  language?: string;
+  publisher?: string;
+  categories?: string[];
+}
+
+interface GoogleBooksItem {
+  id: string;
+  volumeInfo: GoogleBooksVolumeInfo;
+}
 
 // Movie API helpers using secure fetch with parallel requests - fetch up to 240 items
-export const fetchPopularMoviesWithFetch = async (tmdbApiKey: string, totalPages: number = 20, baseUrl: string = 'http://localhost:3000') => {
+export const fetchPopularMoviesWithFetch = async (tmdbApiKey: string): Promise<Movie[]> => {
   const seenIds = new Set();
-  let allMovies: any[] = [];
+  const allMovies: Movie[] = [];
   
   // Calculate how many pages we need to get 240 movies
   // TMDB returns 20 movies per page, so we need 12 pages minimum
@@ -52,9 +86,9 @@ export const fetchPopularMoviesWithFetch = async (tmdbApiKey: string, totalPages
 };
 
 // TV Shows API helpers using secure fetch with parallel requests - fetch up to 240 items
-export const fetchPopularTVShowsWithFetch = async (tmdbApiKey: string, totalPages: number = 20, baseUrl: string = 'http://localhost:3000') => {
+export const fetchPopularTVShowsWithFetch = async (tmdbApiKey: string): Promise<TVShow[]> => {
   const seenIds = new Set();
-  let allTVShows: any[] = [];
+  const allTVShows: TVShow[] = [];
   
   // Calculate how many pages we need to get 240 TV shows
   // TMDB returns 20 TV shows per page, so we need 12 pages minimum
@@ -102,7 +136,7 @@ export const fetchPopularTVShowsWithFetch = async (tmdbApiKey: string, totalPage
 };
 
 // Books API helpers using secure fetch with better error handling and data validation
-export const fetchBestsellersWithFetch = async (googleBooksApiKey: string, nyTimesApiKey: string, baseUrl: string) => {
+export const fetchBestsellersWithFetch = async (googleBooksApiKey: string, nyTimesApiKey: string, baseUrl: string): Promise<Book[]> => {
   console.log('📚 fetchBestsellersWithFetch called with baseUrl:', baseUrl);
   
   try {
@@ -117,7 +151,7 @@ export const fetchBestsellersWithFetch = async (googleBooksApiKey: string, nyTim
     }
     
     const isbns = nyTimesData.results.books
-      .map((book: any) => book.primary_isbn13)
+      .map((book: NYTimesBook) => book.primary_isbn13)
       .filter((isbn: string) => isbn && isbn.length > 0); // Filter out empty ISBNs
     
     console.log('📚 Found valid ISBNs:', isbns.length);
@@ -151,8 +185,8 @@ export const fetchBestsellersWithFetch = async (googleBooksApiKey: string, nyTim
     
     // Filter and validate book data
     const validBooks = bookDetailsResponses
-      .filter((book: any) => book !== null)
-      .filter((book: any) => {
+      .filter((book): book is GoogleBooksItem => book !== null)
+      .filter((book: GoogleBooksItem) => {
         // Ensure book has required fields
         const hasRequiredFields = book.volumeInfo && 
           book.volumeInfo.title && 
@@ -164,10 +198,10 @@ export const fetchBestsellersWithFetch = async (googleBooksApiKey: string, nyTim
         
         return hasRequiredFields;
       })
-      .map((book: any) => ({
+      .map((book: GoogleBooksItem) => ({
         ...book,
         // Ensure type is set
-        type: 'book',
+        type: 'book' as const,
         // Add fallback values for missing fields
         volumeInfo: {
           ...book.volumeInfo,
@@ -177,10 +211,10 @@ export const fetchBestsellersWithFetch = async (googleBooksApiKey: string, nyTim
           publishedDate: book.volumeInfo.publishedDate || 'Unknown Date',
           pageCount: book.volumeInfo.pageCount || 0,
           averageRating: book.volumeInfo.averageRating || 0,
-          imageLinks: {
-            thumbnail: book.volumeInfo.imageLinks?.thumbnail || null,
-            smallThumbnail: book.volumeInfo.imageLinks?.smallThumbnail || null,
-          },
+                  imageLinks: {
+          thumbnail: book.volumeInfo.imageLinks?.thumbnail || undefined,
+          smallThumbnail: book.volumeInfo.imageLinks?.smallThumbnail || undefined,
+        },
           previewLink: book.volumeInfo.previewLink || '',
           infoLink: book.volumeInfo.infoLink || '',
           language: book.volumeInfo.language || 'en',

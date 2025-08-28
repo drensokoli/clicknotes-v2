@@ -1,5 +1,5 @@
 import Image from "next/image"
-import { Star, Calendar, Clock } from "lucide-react"
+import { Star } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useModal } from "./modal-provider"
 import { useState, useEffect, useRef } from "react"
@@ -142,8 +142,8 @@ export interface Book {
     pageCount?: number
     averageRating?: number
     imageLinks?: {
-      thumbnail?: string
-      smallThumbnail?: string
+      thumbnail?: string | null
+      smallThumbnail?: string | null
     }
     previewLink?: string
     infoLink?: string
@@ -171,7 +171,7 @@ interface MediaCardProps {
 
 export function MediaCard({ item, className }: MediaCardProps) {
   const { openModal } = useModal()
-  const { theme, resolvedTheme } = useTheme()
+  const { resolvedTheme } = useTheme()
   const [showButtons, setShowButtons] = useState(false)
   const [mounted, setMounted] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
@@ -181,8 +181,19 @@ export function MediaCard({ item, className }: MediaCardProps) {
     setMounted(true)
   }, [])
   
-  // Use resolved theme to determine button styles, but only after mounting
-  const isDark = mounted ? resolvedTheme === 'dark' : false
+  // Hide buttons when clicking outside on mobile
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (cardRef.current && !cardRef.current.contains(event.target as Node)) {
+        setShowButtons(false)
+      }
+    }
+
+    if (showButtons) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showButtons])
   
   // Safety check: ensure item has required properties
   if (!item || !item.type) {
@@ -216,20 +227,6 @@ export function MediaCard({ item, className }: MediaCardProps) {
       return null;
     }
   }
-  
-  // Hide buttons when clicking outside on mobile
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (cardRef.current && !cardRef.current.contains(event.target as Node)) {
-        setShowButtons(false)
-      }
-    }
-
-    if (showButtons) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showButtons])
   
   // Helper functions to extract data based on item type
   const getTitle = () => {
@@ -265,107 +262,6 @@ export function MediaCard({ item, className }: MediaCardProps) {
     }
     return 0;
   };
-
-  const getYear = () => {
-    if (item.type === "movie") {
-      return item.release_date ? new Date(item.release_date).getFullYear() : null;
-    }
-    if (item.type === "tvshow") {
-      return item.first_air_date ? new Date(item.first_air_date).getFullYear() : null;
-    }
-    if (item.type === "book") {
-      return item.volumeInfo?.publishedDate ? new Date(item.volumeInfo.publishedDate).getFullYear() : null;
-    }
-    return null;
-  };
-
-  const getDescription = () => {
-    if (item.type === "movie" || item.type === "tvshow") {
-      return item.overview || 'No description available.';
-    }
-    if (item.type === "book") {
-      return item.volumeInfo?.description || 'No description available.';
-    }
-    return 'No description available.';
-  };
-
-  const getAuthors = () => {
-    if (item.type === "book") {
-      return item.volumeInfo?.authors || [];
-    }
-    return [];
-  };
-
-  const renderMetadata = () => {
-    const year = getYear();
-    
-    switch (item.type) {
-      case "movie":
-        return (
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            {year && (
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                <span>{year}</span>
-              </div>
-            )}
-            {item.runtime && (
-              <div className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                <span>{item.runtime}m</span>
-              </div>
-            )}
-          </div>
-        )
-      case "tvshow":
-        return (
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            {year && (
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                <span>{year}</span>
-              </div>
-            )}
-            {item.number_of_seasons && (
-              <div className="flex items-center gap-1">
-                <Tv className="h-3 w-3" />
-                <span>{item.number_of_seasons} season{item.number_of_seasons > 1 ? "s" : ""}</span>
-              </div>
-            )}
-          </div>
-        )
-      case "book":
-        // Debug logging for book data
-        if (process.env.NODE_ENV === 'development') {
-          console.log('📚 Rendering book:', {
-            id: item.id,
-            hasVolumeInfo: !!item.volumeInfo,
-            volumeInfoKeys: item.volumeInfo ? Object.keys(item.volumeInfo) : [],
-            title: item.volumeInfo?.title,
-            pageCount: item.volumeInfo?.pageCount
-          });
-        }
-        
-        return (
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            {year && (
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                <span>{year}</span>
-              </div>
-            )}
-            {item.volumeInfo?.pageCount && (
-              <div className="flex items-center gap-1">
-                <BookOpen className="h-3 w-3" />
-                <span>{item.volumeInfo.pageCount} pages</span>
-              </div>
-            )}
-          </div>
-        )
-      default:
-        return null
-    }
-  }
 
   return (
     <div

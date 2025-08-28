@@ -7,14 +7,11 @@ import { Button } from "./button"
 import { cn } from "@/lib/utils"
 
 interface PasswordInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  showStrengthIndicator?: boolean
-  strength?: 'weak' | 'medium' | 'strong'
+  className?: string
 }
 
 export function PasswordInput({ 
   className, 
-  showStrengthIndicator = false,
-  strength,
   ...props 
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false)

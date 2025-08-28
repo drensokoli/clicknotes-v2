@@ -1,6 +1,37 @@
 import axios from 'axios';
 import { isDevelopment, isServer } from './ssl-config';
 
+// Interfaces for API responses
+interface NYTimesBook {
+  primary_isbn13: string;
+  title: string;
+  author: string;
+  description: string;
+  rank: number;
+  weeks_on_list: number;
+}
+
+interface GoogleBooksItem {
+  id: string;
+  volumeInfo: {
+    title: string;
+    authors?: string[];
+    description?: string;
+    publishedDate?: string;
+    pageCount?: number;
+    averageRating?: number;
+    imageLinks?: {
+      thumbnail?: string;
+      smallThumbnail?: string;
+    };
+    previewLink?: string;
+    infoLink?: string;
+    language?: string;
+    publisher?: string;
+    categories?: string[];
+  };
+}
+
 // Configure axios to handle SSL certificates properly
 const axiosInstance = axios.create({
   timeout: 10000, // 10 second timeout
@@ -10,27 +41,32 @@ const axiosInstance = axios.create({
 });
 
 // Configure SSL handling for development
-if (isDevelopment() && isServer()) {
-  try {
-    // Create a custom HTTPS agent for development that handles SSL issues
-    const https = require('https');
-    const httpsAgent = new https.Agent({
-      rejectUnauthorized: false,
-      // Add additional SSL options if needed
-      requestCert: false
-    });
-    
-    axiosInstance.defaults.httpsAgent = httpsAgent;
-    console.warn('⚠️  SSL verification disabled for development. DO NOT use in production!');
-  } catch (error) {
-    console.warn('⚠️  Could not create HTTPS agent:', error);
-    // Continue without custom HTTPS agent - axios will use default settings
+const configureSSL = async () => {
+  if (isDevelopment() && isServer()) {
+    try {
+      // Create a custom HTTPS agent for development that handles SSL issues
+      const https = await import('https');
+      const httpsAgent = new https.default.Agent({
+        rejectUnauthorized: false,
+        // Add additional SSL options if needed
+        requestCert: false
+      });
+      
+      axiosInstance.defaults.httpsAgent = httpsAgent;
+      console.warn('⚠️  SSL verification disabled for development. DO NOT use in production!');
+    } catch (error) {
+      console.warn('⚠️  Could not create HTTPS agent:', error);
+      // Continue without custom HTTPS agent - axios will use default settings
+    }
   }
-}
+};
+
+// Initialize SSL configuration
+configureSSL();
 
 // Movie API helpers
 export const fetchPopularMovies = async (tmdbApiKey: string, totalPages: number = 20) => {
-  let popularMoviesResults = [];
+  const popularMoviesResults = [];
 
   for (let page = 1; page <= totalPages; page++) {
     try {
@@ -60,7 +96,7 @@ export const searchMoviesByTitle = async (title: string, tmdbApiKey: string) => 
 
 // TV Shows API helpers
 export const fetchPopularTVShows = async (tmdbApiKey: string, totalPages: number = 20) => {
-  let popularTvShowsResults = [];
+  const popularTvShowsResults = [];
 
   for (let page = 1; page <= totalPages; page++) {
     try {
@@ -104,7 +140,7 @@ export const fetchBestsellers = async (googleBooksApiKey: string, nyTimesApiKey:
     if (bestsellersData.status === 200 && data) {
       return typeof data === 'string' ? JSON.parse(data) : data;
     }
-  } catch (error) {
+  } catch {
     console.log('Redis cache not available, fetching from APIs...');
   }
 
@@ -114,13 +150,13 @@ export const fetchBestsellers = async (googleBooksApiKey: string, nyTimesApiKey:
       `https://api.nytimes.com/svc/books/v3/lists/current/hardcover-fiction.json?api-key=${nyTimesApiKey}`
     );
     
-    const isbns = response.data.results.books.map((book: any) => book.primary_isbn13);
+    const isbns = response.data.results.books.map((book: NYTimesBook) => book.primary_isbn13);
     const bookDetailsPromises = isbns.map(async (isbn: string) => 
       axiosInstance.get(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&key=${googleBooksApiKey}`)
     );
     
     const bookDetailsResponses = await Promise.all(bookDetailsPromises);
-    const bestsellers = bookDetailsResponses.flatMap((response: any) => {
+    const bestsellers = bookDetailsResponses.flatMap((response: { data?: { items?: GoogleBooksItem[] } }) => {
       const items = response.data?.items;
       if (Array.isArray(items) && items.length > 0) {
         return items;

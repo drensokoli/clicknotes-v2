@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from "@redis/client"
 import { fetchJSON } from '../../../lib/secure-fetch'
 
+// Type definitions for API responses
+interface Movie {
+  id: number;
+  title: string;
+  release_date?: string;
+  [key: string]: unknown;
+}
+
+interface TVShow {
+  id: number;
+  name: string;
+  first_air_date?: string;
+  [key: string]: unknown;
+}
+
+interface Book {
+  title: string;
+  primary_isbn13?: string;
+  [key: string]: unknown;
+}
+
 // Helper function to create Redis client
 const createRedisClient = () => {
   const redisHost = process.env.REDIS_HOST
@@ -26,7 +47,7 @@ const createRedisClient = () => {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 // Fetch movie details including OMDB data and Stremio link
-async function fetchMovieWithDetails(movie: any, tmdbApiKey: string, omdbApiKeys: string[]) {
+async function fetchMovieWithDetails(movie: Movie, tmdbApiKey: string, omdbApiKeys: string[]) {
   try {
     // Fetch detailed movie info from TMDB
     const details = await fetchJSON(
@@ -75,7 +96,7 @@ async function fetchMovieWithDetails(movie: any, tmdbApiKey: string, omdbApiKeys
 }
 
 // Fetch TV show details including OMDB data and Stremio link
-async function fetchTVShowWithDetails(tvShow: any, tmdbApiKey: string, omdbApiKeys: string[]) {
+async function fetchTVShowWithDetails(tvShow: TVShow, tmdbApiKey: string, omdbApiKeys: string[]) {
   try {
     // Fetch detailed TV show info from TMDB
     const details = await fetchJSON(
@@ -124,7 +145,7 @@ async function fetchTVShowWithDetails(tvShow: any, tmdbApiKey: string, omdbApiKe
 }
 
 // Fetch book details including Google Books data
-async function fetchBookWithDetails(book: any, googleBooksApiKey: string) {
+async function fetchBookWithDetails(book: Book, googleBooksApiKey: string) {
   try {
     // If book already has volumeInfo, it's from Google Books API
     if (book.volumeInfo) {

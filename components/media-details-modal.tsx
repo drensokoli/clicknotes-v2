@@ -1,10 +1,8 @@
 "use client"
 
-import { X, Star, Calendar, Clock, ExternalLink, Play, Eye, Bookmark, Users, User, MonitorPlay, BookOpen } from "lucide-react"
+import { X, Star, Calendar, ExternalLink, Play, Eye, Bookmark, User, MonitorPlay, BookOpen } from "lucide-react"
 import { getOmdbData } from "@/lib/omdb-helpers"
 import Image from "next/image"
-import { cn } from "@/lib/utils"
-// import { MediaItem } from "./content-section"
 import { useModal } from "./modal-provider"
 import { useEffect, useState } from "react"
 import { fetchMovieDetails, fetchTVDetails, getGenreNames, getYouTubeTrailer, type MovieDetails, type TVDetails } from "@/lib/tmdb-details"
@@ -174,7 +172,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
         fetchDetails()
       }
     }
-  }, [isModalOpen, item, tmdbApiKey])
+  }, [isModalOpen, item, tmdbApiKey, omdbApiKeys])
 
   // Handle escape key
   useEffect(() => {

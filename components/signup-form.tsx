@@ -47,16 +47,6 @@ export function SignupForm({
     setTouched(prev => ({ ...prev, [fieldName]: true }))
   }
 
-  // Validate individual field
-  const validateField = (fieldName: string, value: string) => {
-    const validation = validateSignup({ name, email, password, confirmPassword })
-    if (validation.errors[fieldName]) {
-      setFieldErrors(prev => ({ ...prev, [fieldName]: validation.errors[fieldName] }))
-    } else {
-      setFieldErrors(prev => ({ ...prev, [fieldName]: "" }))
-    }
-  }
-
   const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -104,7 +94,7 @@ export function SignupForm({
     setIsLoading(true)
     try {
       await signIn("google", { callbackUrl: "/" })
-    } catch (error) {
+    } catch {
       setError("An error occurred with Google sign-in.")
       setIsLoading(false)
     }

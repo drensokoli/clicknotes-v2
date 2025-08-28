@@ -75,16 +75,6 @@ export default function RetryPopulationPage() {
     }
   };
 
-  const getActionName = (action: string) => {
-    switch (action) {
-      case 'populate-movies': return 'Movies';
-      case 'populate-tvshows': return 'TV Shows';
-      case 'populate-books': return 'Books';
-      case 'populate-all': return 'All Media Types';
-      default: return action;
-    }
-  };
-
   const actions = [
     { key: 'populate-movies', label: '🔄 Retry Movies Population', color: 'bg-red-600 hover:bg-red-700' },
     { key: 'populate-tvshows', label: '🔄 Retry TV Shows Population', color: 'bg-red-600 hover:bg-red-700' },
@@ -143,7 +133,7 @@ export default function RetryPopulationPage() {
               <li>• Click any button above to retry the corresponding operation</li>
               <li>• The system will attempt to populate Redis with fresh data</li>
               <li>• Check the console logs for detailed progress information</li>
-              <li>• You'll receive another email if the retry also fails</li>
+              <li>• You&apos;ll receive another email if the retry also fails</li>
             </ul>
           </div>
         </div>

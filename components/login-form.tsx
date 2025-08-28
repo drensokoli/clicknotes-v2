@@ -78,7 +78,7 @@ export function LoginForm({
         router.refresh()
       }
     } catch (error) {
-      setError("An error occurred. Please try again.")
+      setError(error instanceof Error ? error.message : "An error occurred. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -89,7 +89,7 @@ export function LoginForm({
     try {
       await signIn("google", { callbackUrl: "/" })
     } catch (error) {
-      setError("An error occurred with Google sign-in.")
+      setError(error instanceof Error ? error.message : "An error occurred with Google sign-in.")
       setIsLoading(false)
     }
   }

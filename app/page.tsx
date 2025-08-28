@@ -5,9 +5,10 @@ import { MediaDetailsModal } from "@/components/media-details-modal"
 import { fetchPopularMoviesWithFetch, fetchPopularTVShowsWithFetch, fetchBestsellersWithFetch } from "@/lib/fetch-helpers"
 import { fallbackMovies, fallbackTVShows, fallbackBooks } from "@/lib/fallback-data"
 import type { Metadata } from "next"
+import type { Movie, TVShow, Book } from "@/components/media-card"
 
 // Force static generation with revalidation
-export const revalidate = 60 * 60 * 24 * 7 // 7 days
+export const revalidate = 604800 // 7 days in seconds
 
 export const metadata: Metadata = {
   title: "ClickNotes v2 - Save Movies, TV Shows & Books",
@@ -29,9 +30,9 @@ export const metadata: Metadata = {
 
 // Global cache for Redis data (server-side only)
 let redisDataCache: {
-  movies: any[] | null;
-  tvshows: any[] | null;
-  books: any[] | null;
+  movies: Movie[] | null;
+  tvshows: TVShow[] | null;
+  books: Book[] | null;
   lastFetched: number | null;
 } = {
   movies: null,
@@ -151,7 +152,7 @@ function clearRedisCache() {
 
 // Expose cache clearing function globally for development
 if (typeof global !== 'undefined') {
-  (global as any).clearRedisCache = clearRedisCache;
+  (global as Record<string, unknown>).clearRedisCache = clearRedisCache;
 }
 
 // Helper function to get active Redis database with failover
@@ -164,7 +165,7 @@ async function getActiveRedis(baseUrl: string) {
       return baseUrl;
     }
   } catch (error) {
-    console.log('⚠️ Primary Redis failed, trying backup...');
+    console.log(error instanceof Error ? error.message : "⚠️ Primary Redis failed, trying backup...");
   }
   
   // Try backup Redis (you'll need to implement this endpoint)
@@ -176,7 +177,7 @@ async function getActiveRedis(baseUrl: string) {
       return backupUrl;
     }
   } catch (error) {
-    console.log('❌ Both Redis databases failed');
+    console.log(error instanceof Error ? error.message : "❌ Both Redis databases failed");
   }
   
   return null; // Fall back to APIs
@@ -193,12 +194,12 @@ export default async function Home() {
     process.env.OMDB_API_KEY_3!,
   ]
 
-  let movies: any[] = []
-  let tvShows: any[] = []
-  let books: any[] = []
+  let movies: Movie[] = []
+  let tvShows: TVShow[] = []
+  let books: Book[] = []
   
   // Track which Redis keys have been fetched for progressive loading
-  let redisKeysFetched = {
+  const redisKeysFetched = {
     movies: 1, // Start with movies1
     tvshows: 1, // Start with tvshows1
     books: 1   // Start with books1
@@ -258,18 +259,18 @@ export default async function Home() {
       if (hasRedisMovies && hasRedisTVShows && hasRedisBooks) {
         // All Redis data is available - use first keys only
         console.log('✅ Using Redis data for all media types (first keys only)')
-        movies = Array.isArray(redisMovies.value) ? redisMovies.value : []
-        tvShows = Array.isArray(redisTVShows.value) ? redisTVShows.value : []
-        books = Array.isArray(redisBooks.value) ? redisBooks.value : []
+        movies = Array.isArray(redisMovies.value) ? redisMovies.value.map(movie => ({ ...movie, type: "movie" as const })) : []
+        tvShows = Array.isArray(redisTVShows.value) ? redisTVShows.value.map(tvShow => ({ ...tvShow, type: "tvshow" as const })) : []
+        books = Array.isArray(redisBooks.value) ? redisBooks.value.map(book => ({ ...book, type: "book" as const })) : []
       } else {
         // Some Redis data is missing, fetch missing data from APIs
         console.log('⚠️ Some Redis data missing, fetching missing data from APIs...')
         
         // Use Redis data where available, fetch from APIs where missing, and ensure arrays (not null)
         // For fallback API calls, only fetch 60 items to keep data manageable
-        movies = hasRedisMovies && Array.isArray(redisMovies.value) ? redisMovies.value : await fetchPopularMoviesWithFetch(tmdbApiKey, 3, baseUrl) || []
-        tvShows = hasRedisTVShows && Array.isArray(redisTVShows.value) ? redisTVShows.value : await fetchPopularTVShowsWithFetch(tmdbApiKey, 3, baseUrl) || []
-        books = hasRedisBooks && Array.isArray(redisBooks.value) ? redisBooks.value : await fetchBestsellersWithFetch(googleBooksApiKey, nyTimesApiKey, baseUrl) || []
+        movies = hasRedisMovies && Array.isArray(redisMovies.value) ? redisMovies.value.map(movie => ({ ...movie, type: "movie" as const })) : (await fetchPopularMoviesWithFetch(tmdbApiKey) || []).map(movie => ({ ...movie, type: "movie" as const }))
+        tvShows = hasRedisTVShows && Array.isArray(redisTVShows.value) ? redisTVShows.value.map(tvShow => ({ ...tvShow, type: "tvshow" as const })) : (await fetchPopularTVShowsWithFetch(tmdbApiKey) || []).map(tvShow => ({ ...tvShow, type: "tvshow" as const }))
+        books = hasRedisBooks && Array.isArray(redisBooks.value) ? redisBooks.value.map(book => ({ ...book, type: "book" as const })) : (await fetchBestsellersWithFetch(googleBooksApiKey, nyTimesApiKey, baseUrl) || []).map(book => ({ ...book, type: "book" as const }))
         
         // Limit fallback API data to 60 items maximum
         if (!hasRedisMovies && movies && movies.length > 60) {
@@ -285,17 +286,17 @@ export default async function Home() {
           console.log('📊 Limited fallback books to 60 items');
         }
         
-        if (!hasRedisMovies && !movies) movies = fallbackMovies
-        if (!hasRedisTVShows && !tvShows) tvShows = fallbackTVShows
-        if (!hasRedisBooks && !books) books = fallbackBooks
+        if (!hasRedisMovies && !movies) movies = fallbackMovies.map(movie => ({ ...movie, type: "movie" as const }))
+        if (!hasRedisTVShows && !tvShows) tvShows = fallbackTVShows.map(tvShow => ({ ...tvShow, type: "tvshow" as const }))
+        if (!hasRedisBooks && !books) books = fallbackBooks.map(book => ({ ...book, type: "book" as const }))
       }
     }
   } catch (error) {
     console.error('❌ Error fetching initial data:', error)
     // Use fallback data if all methods fail, but limit to 60 items maximum
-    movies = fallbackMovies.slice(0, 60)
-    tvShows = fallbackTVShows.slice(0, 60)
-    books = fallbackBooks.slice(0, 60)
+    movies = fallbackMovies.slice(0, 60).map(movie => ({ ...movie, type: "movie" as const }))
+    tvShows = fallbackTVShows.slice(0, 60).map(tvShow => ({ ...tvShow, type: "tvshow" as const }))
+    books = fallbackBooks.slice(0, 60).map(book => ({ ...book, type: "book" as const }))
     console.log('📊 Using limited fallback data (60 items max per type)')
   }
 

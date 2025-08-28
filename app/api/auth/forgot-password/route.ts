@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
 import crypto from "crypto"
-import { sendEmail, emailTemplates } from "@/lib/email-service"
+import { sendEmail, emailTemplates, EmailConfig } from "@/lib/email-service"
 
 const db = process.env.MONGODB_DB_NAME || "clicknotes-v2"
 
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     // Send password reset email
     try {
       const emailConfig = {
-        provider: (process.env.EMAIL_PROVIDER as any) || 'smtp',
+        provider: (process.env.EMAIL_PROVIDER as string | undefined) || 'smtp',
         apiKey: process.env.EMAIL_API_KEY,
         fromEmail: process.env.EMAIL_FROM || 'noreply@clicknotes.com',
         fromName: process.env.EMAIL_FROM_NAME || 'ClickNotes',
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       const resetLink = `${process.env.NEXTAUTH_URL}/reset-password?token=${resetToken}`
       const { subject, html, text } = emailTemplates.passwordReset(resetLink, user.name || 'User')
       
-      await sendEmail(emailConfig, email.toLowerCase(), subject, html, text)
+      await sendEmail(emailConfig as EmailConfig, email.toLowerCase(), subject, html, text)
       
       console.log(`Password reset email sent to ${email}`)
     } catch (emailError) {

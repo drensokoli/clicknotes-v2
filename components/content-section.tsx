@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { MediaCard, MediaItem, Movie, TVShow, Book } from "./media-card"
 import { searchContentByTitle, searchBooksByTitle } from "@/lib/api-helpers"
 import { Film, Tv, BookOpen } from "lucide-react"
@@ -63,7 +63,7 @@ export function ContentSection({
   })
   
   // Function to fetch next Redis key for progressive loading
-  const fetchNextRedisKey = async (mediaType: Section) => {
+  const fetchNextRedisKey = useCallback(async (mediaType: Section) => {
     if (isLoadingNextPage || searchQuery) {
       return;
     }
@@ -139,10 +139,10 @@ export function ContentSection({
     } finally {
       setIsLoadingNextPage(false);
     }
-  };
+  }, [isLoadingNextPage, searchQuery, currentRedisKeys]);
 
   // Handle infinite scroll with progressive loading
-  const loadMore = async () => {
+  const loadMore = useCallback(async () => {
     if (isLoading || isLoadingNextPage || searchQuery) {
       return;
     }
@@ -172,7 +172,7 @@ export function ContentSection({
       }));
       setIsLoading(false);
     }, 300);
-  };
+  }, [isLoading, isLoadingNextPage, searchQuery, activeSection, allMediaData, displayCounts, currentRedisKeys, fetchNextRedisKey]);
 
   // Set up intersection observer for infinite scroll
   useEffect(() => {
@@ -205,7 +205,7 @@ export function ContentSection({
       clearTimeout(timer);
       observer.disconnect();
     };
-  }, [activeSection, isLoading, isLoadingNextPage, searchQuery, isInitialized, displayCounts, allMediaData]);
+  }, [activeSection, isLoading, isLoadingNextPage, searchQuery, isInitialized, displayCounts, allMediaData, loadMore]);
 
   useEffect(() => {
     // Check initial hash
@@ -251,17 +251,17 @@ export function ContentSection({
             tmdbApiKey,
             type: "movie"
           })
-          results = movieResults.map((movie: any) => ({ ...movie, type: "movie" as const }))
+          results = movieResults.map((movie: Movie) => ({ ...movie, type: "movie" as const }))
         } else if (activeSection === "tvshows") {
           const tvResults = await searchContentByTitle({
             title: searchQuery,
             tmdbApiKey,
             type: "tv"
           })
-          results = tvResults.map((tv: any) => ({ ...tv, type: "tvshow" as const }))
+          results = tvResults.map((tv: TVShow) => ({ ...tv, type: "tvshow" as const }))
         } else if (activeSection === "books") {
           const bookResults = await searchBooksByTitle(searchQuery, googleBooksApiKey)
-          results = bookResults.map((book: any) => ({ ...book, type: "book" as const }))
+          results = bookResults.map((book: Book) => ({ ...book, type: "book" as const }))
         }
 
         setSearchResults(results)
@@ -313,27 +313,12 @@ export function ContentSection({
     }
   }
 
-  const getSectionDescription = () => {
-    switch (activeSection) {
-      case "movies":
-        return "Discover and save your favorite movies"
-      case "tvshows":
-        return "Explore popular TV series and shows"
-      case "books":
-        return "Find great books and build your reading list"
-      default:
-        return "Discover and save your favorite movies"
-    }
-  }
-
   const navItems = [
     { id: "movies" as Section, label: "Movies", icon: Film },
     { id: "tvshows" as Section, label: "TV", icon: Tv },
     { id: "books" as Section, label: "Books", icon: BookOpen },
   ]
-
-
-
+  
   // Don't render until hash is processed to prevent flash
   if (!isInitialized) {
     return (
@@ -641,7 +626,7 @@ export function ContentSection({
             </div>
             <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-3">No results found</h3>
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed mb-6">
-              We couldn't find any {getSectionTitle().toLowerCase()} matching "{searchQuery}". 
+              We couldn&apos;t find any {getSectionTitle().toLowerCase()} matching &quot;{searchQuery}&quot;. 
               Try different keywords or browse our collection.
             </p>
             <button

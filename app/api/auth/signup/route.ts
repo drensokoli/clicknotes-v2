@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import * as bcrypt from "bcryptjs"
 import clientPromise from "@/lib/mongodb"
-import { sendEmail, emailTemplates } from "@/lib/email-service"
+import { sendEmail, emailTemplates, EmailConfig } from "@/lib/email-service"
 import crypto from "crypto"
 import { validateSignup } from "@/lib/validation"
 
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
            // Send verification email
            try {
              const emailConfig = {
-               provider: (process.env.EMAIL_PROVIDER as any) || 'smtp',
+               provider: (process.env.EMAIL_PROVIDER as string | undefined) || 'smtp',
                apiKey: process.env.EMAIL_API_KEY,
                fromEmail: process.env.EMAIL_FROM || 'noreply@clicknotes.com',
                fromName: process.env.EMAIL_FROM_NAME || 'ClickNotes',
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
              const verificationLink = `${process.env.NEXTAUTH_URL}/verify-email?token=${verificationToken}`
              const { subject, html, text } = emailTemplates.emailVerification(verificationLink, user.name)
              
-             await sendEmail(emailConfig, user.email, subject, html, text)
+             await sendEmail(emailConfig as EmailConfig, user.email, subject, html, text)
              
              console.log(`Verification email sent to ${user.email}`)
            } catch (emailError) {

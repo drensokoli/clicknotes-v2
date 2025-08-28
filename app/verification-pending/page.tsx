@@ -85,7 +85,7 @@ export default function VerificationPendingPage() {
             </div>
             <CardTitle className="text-xl">Check Your Email</CardTitle>
             <CardDescription>
-              We've sent a verification link to <strong>{email}</strong>
+              We&apos;ve sent a verification link to <strong>{email}</strong>
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -130,12 +130,12 @@ export default function VerificationPendingPage() {
                   className="w-full"
                 >
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  I've Verified My Email - Sign In
+                  I&apos;ve Verified My Email - Sign In
                 </Button>
               </div>
 
               <div className="text-center text-sm text-muted-foreground">
-                Didn't receive the email? Check your spam folder or{" "}
+                Didn&apos;t receive the email? Check your spam folder or{" "}
                 <button 
                   onClick={handleResendVerification}
                   disabled={isResending}

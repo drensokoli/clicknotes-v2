@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -15,17 +15,7 @@ export default function VerifyEmailPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  useEffect(() => {
-    const tokenParam = searchParams.get("token")
-    if (!tokenParam) {
-      setError("Invalid verification link.")
-      return
-    }
-    setToken(tokenParam)
-    verifyEmail(tokenParam)
-  }, [searchParams])
-
-  const verifyEmail = async (verificationToken: string) => {
+  const verifyEmail = useCallback(async (verificationToken: string) => {
     setIsLoading(true)
     setError("")
     setMessage("")
@@ -54,7 +44,17 @@ export default function VerifyEmailPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    const tokenParam = searchParams.get("token")
+    if (!tokenParam) {
+      setError("Invalid verification link.")
+      return
+    }
+    setToken(tokenParam)
+    verifyEmail(tokenParam)
+  }, [searchParams, verifyEmail])
 
   const resendVerification = async () => {
     setIsLoading(true)

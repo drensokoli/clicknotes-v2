@@ -1,7 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from "@redis/client"
+import { createClient, RedisClientType } from "@redis/client"
 import { fetchJSON } from '../../../lib/secure-fetch'
 import { sendEmail } from '../../../lib/email-service'
+import { Book, Movie, TVShow } from '@/components/media-card'
+
+// Type definitions for API responses
+// interface Movie {
+//   id: number;
+//   title: string;
+//   release_date?: string;
+//   [key: string]: unknown;
+// }
+
+// interface TVShow {
+//   id: number;
+//   name: string;
+//   first_air_date?: string;
+//   [key: string]: unknown;
+// }
+
+// interface Book {
+//   title: string;
+//   primary_isbn13?: string;
+//   [key: string]: unknown;
+// }
+
+interface NYTimesList {
+  list_name_encoded: string;
+  books: Book[];
+}
+
+interface NYTimesBook extends Book {
+  primary_isbn13: string;
+}
 
 // Helper function to create Redis client
 const createRedisClient = () => {
@@ -82,7 +113,7 @@ const meetsQualityStandards = (rating: number, voteCount: number) => {
 };
 
 // Helper function to clear Redis data
-async function clearRedisData(client: any, dataType: string) {
+async function clearRedisData(client: RedisClientType, dataType: string) {
   try {
     console.log(`[CLEAR] Clearing Redis ${dataType} data...`);
     await client.del(dataType);
@@ -93,47 +124,6 @@ async function clearRedisData(client: any, dataType: string) {
 }
 
 // Helper function to store data in Redis with automatic size reduction
-async function storeInRedisWithFallback(client: any, key: string, data: any[], initialLimit: number = 240) {
-  let currentLimit = initialLimit;
-  let attempts = 0;
-  const maxAttempts = 10; // Prevent infinite loops
-  
-  while (attempts < maxAttempts) {
-    try {
-      // Ensure the limit is divisible by 20
-      const adjustedLimit = Math.floor(currentLimit / 20) * 20;
-      const limitedData = data.slice(0, adjustedLimit);
-      const jsonData = JSON.stringify(limitedData);
-      
-      console.log(`[REDIS] Attempting to store ${limitedData.length} items (limit: ${currentLimit}, adjusted: ${adjustedLimit})`);
-      console.log(`[REDIS] JSON size: ${jsonData.length} characters`);
-      
-      await client.set(key, jsonData);
-      console.log(`[REDIS] Successfully stored ${limitedData.length} items in Redis`);
-      
-      return limitedData;
-    } catch (error: any) {
-      attempts++;
-      console.error(`[REDIS] Storage attempt ${attempts} failed:`, error.message);
-      
-      if (error.message.includes('OOM') || error.message.includes('maxmemory')) {
-        // Reduce by 20 items to maintain divisibility by 20
-        currentLimit -= 20;
-        console.log(`[REDIS] Redis out of memory, reducing limit to ${currentLimit} items (divisible by 20)`);
-        
-        if (currentLimit <= 0) {
-          console.error(`[REDIS] Cannot store any items, Redis memory limit too low`);
-          throw new Error('Redis memory limit too low for any data storage');
-        }
-      } else {
-        // Non-memory related error, don't retry
-        throw error;
-      }
-    }
-  }
-  
-  throw new Error(`Failed to store data after ${maxAttempts} attempts`);
-}
 
 // Helper function to rotate API keys (move failed keys to end)
 function rotateApiKeys(apiKeys: string[], failedIndex: number) {
@@ -145,7 +135,7 @@ function rotateApiKeys(apiKeys: string[], failedIndex: number) {
 }
 
 // Fetch movie details including OMDB data and Stremio link
-async function fetchMovieWithDetails(movie: any, tmdbApiKey: string, omdbApiKeys: string[]) {
+async function fetchMovieWithDetails(movie: Movie, tmdbApiKey: string, omdbApiKeys: string[]) {
   try {
     console.log(`[MOVIE] Starting fetch for: ${movie.title} (ID: ${movie.id})`);
     console.log(`[MOVIE] Movie data structure:`, {
@@ -283,7 +273,7 @@ async function fetchMovieWithDetails(movie: any, tmdbApiKey: string, omdbApiKeys
 }
 
 // Fetch TV show details including OMDB data and Stremio link
-async function fetchTVShowWithDetails(tvShow: any, tmdbApiKey: string, omdbApiKeys: string[]) {
+async function fetchTVShowWithDetails(tvShow: TVShow, tmdbApiKey: string, omdbApiKeys: string[]) {
   try {
     console.log(`[TVSHOW] Starting fetch for: ${tvShow.name} (ID: ${tvShow.id})`);
     console.log(`[TVSHOW] TV Show data structure:`, {
@@ -421,184 +411,184 @@ async function fetchTVShowWithDetails(tvShow: any, tmdbApiKey: string, omdbApiKe
 }
 
 // Fetch book details including Google Books data
-async function fetchBookWithDetails(book: any, googleBooksApiKey: string) {
-  try {
-    console.log(`[BOOK] Starting processing for: ${book.title}`);
-    console.log(`[BOOK] Book data structure:`, {
-      hasTitle: !!book.title,
-      hasIsbn: !!book.primary_isbn13,
-      hasAuthor: !!book.author,
-      hasDescription: !!book.description,
-      hasBookImage: !!book.book_image,
-      hasPublisher: !!book.publisher,
-      keys: Object.keys(book)
-    });
+// async function fetchBookWithDetails(book: any, googleBooksApiKey: string) {
+//   try {
+//     console.log(`[BOOK] Starting processing for: ${book.title}`);
+//     console.log(`[BOOK] Book data structure:`, {
+//       hasTitle: !!book.title,
+//       hasIsbn: !!book.primary_isbn13,
+//       hasAuthor: !!book.author,
+//       hasDescription: !!book.description,
+//       hasBookImage: !!book.book_image,
+//       hasPublisher: !!book.publisher,
+//       keys: Object.keys(book)
+//     });
     
-    // If book already has volumeInfo, it's from Google Books API
-    if (book.volumeInfo) {
-      console.log(`[BOOK] Book already has volumeInfo: ${book.title}`);
-      console.log(`[BOOK] VolumeInfo structure:`, {
-        hasTitle: !!book.volumeInfo.title,
-        hasAuthors: !!book.volumeInfo.authors,
-        hasDescription: !!book.volumeInfo.description,
-        hasImageLinks: !!book.volumeInfo.imageLinks,
-        volumeInfoKeys: Object.keys(book.volumeInfo)
-      });
-      return book
-    }
+//     // If book already has volumeInfo, it's from Google Books API
+//     if (book.volumeInfo) {
+//       console.log(`[BOOK] Book already has volumeInfo: ${book.title}`);
+//       console.log(`[BOOK] VolumeInfo structure:`, {
+//         hasTitle: !!book.volumeInfo.title,
+//         hasAuthors: !!book.volumeInfo.authors,
+//         hasDescription: !!book.volumeInfo.description,
+//         hasImageLinks: !!book.volumeInfo.imageLinks,
+//         volumeInfoKeys: Object.keys(book.volumeInfo)
+//       });
+//       return book
+//     }
 
-    // If it's from NY Times API, fetch Google Books details
-    if (book.primary_isbn13) {
-      console.log(`[BOOK] Fetching Google Books data for ISBN: ${book.primary_isbn13}`);
-      console.log(`[BOOK] Google Books API key available: ${!!googleBooksApiKey}`);
+//     // If it's from NY Times API, fetch Google Books details
+//     if (book.primary_isbn13) {
+//       console.log(`[BOOK] Fetching Google Books data for ISBN: ${book.primary_isbn13}`);
+//       console.log(`[BOOK] Google Books API key available: ${!!googleBooksApiKey}`);
       
-      try {
-        const googleData = await fetchJSON(
-        `https://www.googleapis.com/books/v1/volumes?q=isbn:${book.primary_isbn13}&key=${googleBooksApiKey}`
-      )
+//       try {
+//         const googleData = await fetchJSON(
+//         `https://www.googleapis.com/books/v1/volumes?q=isbn:${book.primary_isbn13}&key=${googleBooksApiKey}`
+//       )
         
-        console.log(`[BOOK] Google Books response for ${book.title}:`, {
-          hasData: !!googleData,
-          hasItems: !!googleData?.items,
-          itemsCount: googleData?.items?.length || 0,
-          responseKeys: googleData ? Object.keys(googleData) : [],
-          error: googleData?.error || null,
-          totalItems: googleData?.totalItems || 0
-        });
+//         console.log(`[BOOK] Google Books response for ${book.title}:`, {
+//           hasData: !!googleData,
+//           hasItems: !!googleData?.items,
+//           itemsCount: googleData?.items?.length || 0,
+//           responseKeys: googleData ? Object.keys(googleData) : [],
+//           error: googleData?.error || null,
+//           totalItems: googleData?.totalItems || 0
+//         });
         
-        if (googleData && googleData.items && googleData.items.length > 0) {
-          const googleBook = googleData.items[0]
-          console.log(`[BOOK] First Google Books item for ${book.title}:`, {
-            hasId: !!googleBook.id,
-            hasVolumeInfo: !!googleBook.volumeInfo,
-            volumeInfoKeys: googleBook.volumeInfo ? Object.keys(googleBook.volumeInfo) : [],
-            hasTitle: !!googleBook.volumeInfo?.title,
-            hasAuthors: !!googleBook.volumeInfo?.authors,
-            hasImageLinks: !!googleBook.volumeInfo?.imageLinks
-          });
+//         if (googleData && googleData.items && googleData.items.length > 0) {
+//           const googleBook = googleData.items[0]
+//           console.log(`[BOOK] First Google Books item for ${book.title}:`, {
+//             hasId: !!googleBook.id,
+//             hasVolumeInfo: !!googleBook.volumeInfo,
+//             volumeInfoKeys: googleBook.volumeInfo ? Object.keys(googleBook.volumeInfo) : [],
+//             hasTitle: !!googleBook.volumeInfo?.title,
+//             hasAuthors: !!googleBook.volumeInfo?.authors,
+//             hasImageLinks: !!googleBook.volumeInfo?.imageLinks
+//           });
           
-          // Ensure the book has the proper structure
-          if (googleBook.volumeInfo) {
-            console.log(`[BOOK] Successfully fetched Google Books data for: ${book.title}`);
-            console.log(`[BOOK] Final Google Books structure:`, {
-              id: googleBook.id,
-              type: googleBook.type,
-              hasVolumeInfo: !!googleBook.volumeInfo,
-              volumeInfoKeys: Object.keys(googleBook.volumeInfo),
-              title: googleBook.volumeInfo.title,
-              authors: googleBook.volumeInfo.authors,
-              hasImage: !!googleBook.volumeInfo.imageLinks?.thumbnail
-            });
-            return googleBook
-          } else {
-            console.warn(`[BOOK] Google Books data missing volumeInfo for: ${book.title}`);
-          }
-        } else {
-          console.warn(`[BOOK] No Google Books items found for: ${book.title}`);
-          if (googleData?.error) {
-            console.error(`[BOOK] Google Books API error:`, googleData.error);
-          }
-        }
-      } catch (fetchError) {
-        console.error(`[BOOK] Error fetching from Google Books API for ${book.title}:`, fetchError);
-        console.error(`[BOOK] Fetch error details:`, {
-          message: fetchError instanceof Error ? fetchError.message : 'Unknown error',
-          stack: fetchError instanceof Error ? fetchError.stack : 'No stack trace',
-          isbn: book.primary_isbn13
-        });
-      }
-    } else {
-      console.log(`[BOOK] No ISBN for ${book.title}, cannot fetch Google Books data`);
-    }
+//           // Ensure the book has the proper structure
+//           if (googleBook.volumeInfo) {
+//             console.log(`[BOOK] Successfully fetched Google Books data for: ${book.title}`);
+//             console.log(`[BOOK] Final Google Books structure:`, {
+//               id: googleBook.id,
+//               type: googleBook.type,
+//               hasVolumeInfo: !!googleBook.volumeInfo,
+//               volumeInfoKeys: Object.keys(googleBook.volumeInfo),
+//               title: googleBook.volumeInfo.title,
+//               authors: googleBook.volumeInfo.authors,
+//               hasImage: !!googleBook.volumeInfo.imageLinks?.thumbnail
+//             });
+//             return googleBook
+//           } else {
+//             console.warn(`[BOOK] Google Books data missing volumeInfo for: ${book.title}`);
+//           }
+//         } else {
+//           console.warn(`[BOOK] No Google Books items found for: ${book.title}`);
+//           if (googleData?.error) {
+//             console.error(`[BOOK] Google Books API error:`, googleData.error);
+//           }
+//         }
+//       } catch (fetchError) {
+//         console.error(`[BOOK] Error fetching from Google Books API for ${book.title}:`, fetchError);
+//         console.error(`[BOOK] Fetch error details:`, {
+//           message: fetchError instanceof Error ? fetchError.message : 'Unknown error',
+//           stack: fetchError instanceof Error ? fetchError.stack : 'No stack trace',
+//           isbn: book.primary_isbn13
+//         });
+//       }
+//     } else {
+//       console.log(`[BOOK] No ISBN for ${book.title}, cannot fetch Google Books data`);
+//     }
 
-    // If we can't get proper Google Books data, create a proper structure from NY Times data
-    console.log(`[BOOK] Creating fallback structure for: ${book.title}`);
-    const fallbackBook = {
-      id: book.primary_isbn13 || book.isbn || `book-${Date.now()}`,
-      type: 'book',
-      volumeInfo: {
-        title: book.title || 'Unknown Title',
-        authors: book.author ? [book.author] : [],
-        description: book.description || '',
-        publishedDate: book.published_date || book.created_date?.split('T')[0] || '',
-        pageCount: undefined, // NY Times doesn't provide this
-        averageRating: undefined, // NY Times doesn't provide this
-        imageLinks: {
-          thumbnail: book.book_image || null,
-          smallThumbnail: book.book_image || null
-        },
-        previewLink: book.amazon_product_url || '',
-        infoLink: book.amazon_product_url || '',
-        publisher: book.publisher || '',
-        categories: []
-      },
-      // Add additional NY Times data that might be useful
-      saleInfo: {
-        saleability: 'FOR_SALE',
-        listPrice: {
-          amount: parseFloat(book.price) || 0,
-          currencyCode: 'USD'
-        }
-      }
-    };
+//     // If we can't get proper Google Books data, create a proper structure from NY Times data
+//     console.log(`[BOOK] Creating fallback structure for: ${book.title}`);
+//     const fallbackBook = {
+//       id: book.primary_isbn13 || book.isbn || `book-${Date.now()}`,
+//       type: 'book',
+//       volumeInfo: {
+//         title: book.title || 'Unknown Title',
+//         authors: book.author ? [book.author] : [],
+//         description: book.description || '',
+//         publishedDate: book.published_date || book.created_date?.split('T')[0] || '',
+//         pageCount: undefined, // NY Times doesn't provide this
+//         averageRating: undefined, // NY Times doesn't provide this
+//         imageLinks: {
+//           thumbnail: book.book_image || null,
+//           smallThumbnail: book.book_image || null
+//         },
+//         previewLink: book.amazon_product_url || '',
+//         infoLink: book.amazon_product_url || '',
+//         publisher: book.publisher || '',
+//         categories: []
+//       },
+//       // Add additional NY Times data that might be useful
+//       saleInfo: {
+//         saleability: 'FOR_SALE',
+//         listPrice: {
+//           amount: parseFloat(book.price) || 0,
+//           currencyCode: 'USD'
+//         }
+//       }
+//     };
     
-    console.log(`[BOOK] Fallback book structure for ${book.title}:`, {
-      id: fallbackBook.id,
-      type: fallbackBook.type,
-      hasVolumeInfo: !!fallbackBook.volumeInfo,
-      volumeInfoKeys: Object.keys(fallbackBook.volumeInfo),
-      title: fallbackBook.volumeInfo.title,
-      authors: fallbackBook.volumeInfo.authors,
-      hasImage: !!fallbackBook.volumeInfo.imageLinks.thumbnail,
-      imageUrl: fallbackBook.volumeInfo.imageLinks.thumbnail,
-      hasPublisher: !!fallbackBook.volumeInfo.publisher,
-      publisher: fallbackBook.volumeInfo.publisher,
-      hasSaleInfo: !!fallbackBook.saleInfo,
-      price: fallbackBook.saleInfo.listPrice.amount
-    });
+//     console.log(`[BOOK] Fallback book structure for ${book.title}:`, {
+//       id: fallbackBook.id,
+//       type: fallbackBook.type,
+//       hasVolumeInfo: !!fallbackBook.volumeInfo,
+//       volumeInfoKeys: Object.keys(fallbackBook.volumeInfo),
+//       title: fallbackBook.volumeInfo.title,
+//       authors: fallbackBook.volumeInfo.authors,
+//       hasImage: !!fallbackBook.volumeInfo.imageLinks.thumbnail,
+//       imageUrl: fallbackBook.volumeInfo.imageLinks.thumbnail,
+//       hasPublisher: !!fallbackBook.volumeInfo.publisher,
+//       publisher: fallbackBook.volumeInfo.publisher,
+//       hasSaleInfo: !!fallbackBook.saleInfo,
+//       price: fallbackBook.saleInfo.listPrice.amount
+//     });
     
-    return fallbackBook;
-  } catch (error) {
-    console.error(`[BOOK] Error fetching details for book ${book.title || 'Unknown'}:`, error);
-    console.error(`[BOOK] Error details:`, {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : 'No stack trace',
-      bookTitle: book.title,
-      bookIsbn: book.primary_isbn13
-    });
+//     return fallbackBook;
+//   } catch (error) {
+//     console.error(`[BOOK] Error fetching details for book ${book.title || 'Unknown'}:`, error);
+//     console.error(`[BOOK] Error details:`, {
+//       message: error instanceof Error ? error.message : 'Unknown error',
+//       stack: error instanceof Error ? error.stack : 'No stack trace',
+//       bookTitle: book.title,
+//       bookIsbn: book.primary_isbn13
+//     });
     
-    // Return a minimal book structure to prevent crashes
-    const minimalBook = {
-      id: book.primary_isbn13 || book.isbn || `book-${Date.now()}`,
-      type: 'book',
-      volumeInfo: {
-        title: book.title || 'Unknown Title',
-        authors: book.author ? [book.author] : [],
-        description: book.description || '',
-        publishedDate: book.published_date || book.created_date?.split('T')[0] || '',
-        pageCount: undefined,
-        averageRating: undefined,
-        imageLinks: {
-          thumbnail: book.book_image || null,
-          smallThumbnail: book.book_image || null
-        },
-        previewLink: book.amazon_product_url || '',
-        infoLink: book.amazon_product_url || '',
-        publisher: book.publisher || '',
-        categories: []
-      }
-    };
+//     // Return a minimal book structure to prevent crashes
+//     const minimalBook = {
+//       id: book.primary_isbn13 || book.isbn || `book-${Date.now()}`,
+//       type: 'book',
+//       volumeInfo: {
+//         title: book.title || 'Unknown Title',
+//         authors: book.author ? [book.author] : [],
+//         description: book.description || '',
+//         publishedDate: book.published_date || book.created_date?.split('T')[0] || '',
+//         pageCount: undefined,
+//         averageRating: undefined,
+//         imageLinks: {
+//           thumbnail: book.book_image || null,
+//           smallThumbnail: book.book_image || null
+//         },
+//         previewLink: book.amazon_product_url || '',
+//         infoLink: book.amazon_product_url || '',
+//         publisher: book.publisher || '',
+//         categories: []
+//       }
+//     };
     
-    console.log(`[BOOK] Created minimal fallback book for ${book.title || 'Unknown'}:`, {
-      id: minimalBook.id,
-      type: minimalBook.type,
-      hasVolumeInfo: !!minimalBook.volumeInfo,
-      title: minimalBook.volumeInfo.title
-    });
+//     console.log(`[BOOK] Created minimal fallback book for ${book.title || 'Unknown'}:`, {
+//       id: minimalBook.id,
+//       type: minimalBook.type,
+//       hasVolumeInfo: !!minimalBook.volumeInfo,
+//       title: minimalBook.volumeInfo.title
+//     });
     
-    return minimalBook;
-  }
-}
+//     return minimalBook;
+//   }
+// }
 
 // Populate movies with immediate filtering (more efficient)
 async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[]) {
@@ -777,7 +767,7 @@ async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[]) {
       
     } catch (error) {
       console.error(`[POPULATE] Error storing paginated movies:`, error);
-      await sendErrorNotification('movies', error, 'Storing paginated movies');
+      await sendErrorNotification('movies', error as Error, 'Storing paginated movies');
     }
     
     return finalMovies;
@@ -789,7 +779,7 @@ async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[]) {
     });
     
     // Send error notification email
-    await sendErrorNotification('movies', error, 'Movies population process');
+    await sendErrorNotification('movies', error as Error, 'Movies population process');
     
     throw error;
   } finally {
@@ -976,7 +966,7 @@ async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[]) {
       
     } catch (error) {
       console.error(`[POPULATE] Error storing paginated TV shows:`, error);
-      await sendErrorNotification('tvshows', error, 'Storing paginated TV shows');
+      await sendErrorNotification('tvshows', error as Error, 'Storing paginated TV shows');
     }
     
     return finalTVShows;
@@ -988,7 +978,7 @@ async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[]) {
     });
     
     // Send error notification email
-    await sendErrorNotification('tvshows', error, 'TV shows population process');
+    await sendErrorNotification('tvshows', error as Error, 'TV shows population process');
     
     throw error;
   } finally {
@@ -1055,14 +1045,14 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
     ];
     
     // Collect all ISBNs from the specified lists
-    let allIsbns: string[] = [];
+    const allIsbns: string[] = [];
     const seenIsbns = new Set<string>();
     
     listNames.forEach(listName => {
-      const list = nyTimesData.results.lists.find((list: any) => list.list_name_encoded === listName);
+      const list = nyTimesData.results.lists.find((list: NYTimesList) => list.list_name_encoded === listName);
       if (list && list.books) {
         console.log(`[POPULATE] ${listName}: Found ${list.books.length} books`);
-        list.books.forEach((book: any) => {
+        list.books.forEach((book: NYTimesBook) => {
           if (book.primary_isbn13 && !seenIsbns.has(book.primary_isbn13)) {
             seenIsbns.add(book.primary_isbn13);
             allIsbns.push(book.primary_isbn13);
@@ -1075,7 +1065,6 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
     
     // Fetch Google Books details for each ISBN
     const booksWithDetails = [];
-    let currentKeyIndex = 0;
     
     for (let i = 0; i < allIsbns.length; i++) {
       const isbn = allIsbns[i];
@@ -1089,7 +1078,6 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
         ];
         
         let googleData = null;
-        let usedKeyIndex = 0;
         
         // Try each API key until one works
         for (let keyIndex = 0; keyIndex < googleBooksApiKeys.length; keyIndex++) {
@@ -1101,7 +1089,6 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
             googleData = await fetchJSON(googleBooksUrl);
             
             if (googleData && googleData.items && googleData.items.length > 0) {
-              usedKeyIndex = keyIndex;
               console.log(`[POPULATE] ✅ Google Books API key ${keyIndex + 1} successful for ISBN ${isbn}`);
               break;
             }
@@ -1215,7 +1202,7 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
       
     } catch (error) {
       console.error(`[POPULATE] Error storing paginated books:`, error);
-      await sendErrorNotification('books', error, 'Storing paginated books');
+      await sendErrorNotification('books', error as Error, 'Storing paginated books');
     }
     
     // Verify storage of first group
@@ -1234,7 +1221,7 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
     });
     
     // Send error notification email
-    await sendErrorNotification('books', error, 'Books population process');
+    await sendErrorNotification('books', error as Error, 'Books population process');
     
     throw error;
   } finally {
@@ -1245,7 +1232,7 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
 }
 
 // Helper function to send error notification emails
-async function sendErrorNotification(mediaType: string, error: any, operation: string) {
+async function sendErrorNotification(mediaType: string, error: Error | string, operation: string) {
   try {
     const emailConfig = {
       provider: 'resend' as const,
@@ -1610,7 +1597,7 @@ export async function POST(request: NextRequest) {
     });
     
     // Send error notification email for general population failure
-    await sendErrorNotification('general', error, 'General population process');
+    await sendErrorNotification('general', error as Error, 'General population process');
     
     return NextResponse.json({ 
       error: 'Failed to populate data',

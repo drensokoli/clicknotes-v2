@@ -21,11 +21,11 @@ export const secureFetch = async (url: string, options: RequestInit = {}) => {
     }
     
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Handle SSL certificate errors specifically
-    if (error.code === 'SELF_SIGNED_CERT_IN_CHAIN' || 
-        error.message?.includes('self-signed certificate') ||
-        error.message?.includes('certificate')) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'SELF_SIGNED_CERT_IN_CHAIN' || 
+        error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' && error.message.includes('self-signed certificate') ||
+        error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' && error.message.includes('certificate')) {
       
       console.warn(`SSL certificate issue detected for ${url}, attempting alternative approach...`);
       
@@ -70,7 +70,7 @@ export const fetchJSON = async (url: string, options: RequestInit = {}) => {
 };
 
 // Alternative fetch function that uses axios for better SSL handling
-export const secureFetchWithAxios = async (url: string, options: any = {}) => {
+export const secureFetchWithAxios = async (url: string, options: { headers?: Record<string, string>; [key: string]: unknown } = {}) => {
   try {
     // Dynamic import to avoid bundling axios in client-side code
     const axios = (await import('axios')).default;
@@ -103,7 +103,7 @@ export const secureFetchWithAxios = async (url: string, options: any = {}) => {
     });
     
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`Axios fetch error for ${url}:`, error);
     throw error;
   }
