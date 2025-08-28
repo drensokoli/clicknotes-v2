@@ -35,8 +35,14 @@ export function configureNodeSSL() {
     // Only run on server-side
     const config = getSSLConfig();
     
-    if (!config.rejectUnauthorized) {
-      // This is development-only and should be used carefully
+    // Only set this in development, never in production
+    if (config.rejectUnauthorized === false && process.env.NODE_ENV === 'development') {
+      // Double-check we're not in a production environment like Vercel
+      if (process.env.VERCEL_ENV) {
+        console.warn('⚠️  SSL verification disabled but running in Vercel environment. Skipping SSL configuration.');
+        return;
+      }
+      
       try {
         // Set the environment variable safely
         process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -45,6 +51,8 @@ export function configureNodeSSL() {
         console.warn('⚠️  Could not set SSL environment variable:', error);
         // Continue without setting the variable - the HTTPS agent approach will still work
       }
+    } else {
+      console.log('🔒 SSL verification enabled for production environment');
     }
   }
 }

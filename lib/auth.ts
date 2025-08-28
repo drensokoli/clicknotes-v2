@@ -9,8 +9,9 @@ const db = process.env.MONGODB_DB_NAME || "clicknotes-v2"
 
 // Development environment configuration
 // Fix SSL certificate issues in development
-if (process.env.NODE_ENV === 'development') {
+if (process.env.NODE_ENV === 'development' && !process.env.VERCEL_ENV) {
   // This is safe for development only - allows self-signed certificates
+  // Never set this in production environments like Vercel
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 }
 

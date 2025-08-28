@@ -1,11 +1,16 @@
 // Secure fetch implementation with proper error handling and SSL configuration
 import { configureNodeSSL, getFetchOptionsWithSSL, isDevelopment, isServer } from './ssl-config';
 
-// Configure SSL on module load (server-side only)
-configureNodeSSL();
+// Configure SSL only when explicitly needed (not on module load)
+// configureNodeSSL();
 
 // Export a configured fetch function
 export const secureFetch = async (url: string, options: RequestInit = {}) => {
+  // Only configure SSL when actually making a request in development
+  if (isServer() && isDevelopment()) {
+    configureNodeSSL();
+  }
+  
   const defaultOptions = getFetchOptionsWithSSL(options);
 
   try {

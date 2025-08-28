@@ -5,6 +5,8 @@ import { AuthProvider } from "@/components/auth-provider";
 import { ModalProvider } from "@/components/modal-provider";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { Analytics } from "@vercel/analytics/next"
+import Footer from "@/components/footer"
 
 export const metadata: Metadata = {
   title: "ClickNotes v2",
@@ -30,9 +32,11 @@ export default async function RootLayout({
           >
             <ModalProvider>
               {children}
+              <Analytics />
             </ModalProvider>
           </ThemeProvider>
         </AuthProvider>
+        <Footer />
       </body>
     </html>
   );

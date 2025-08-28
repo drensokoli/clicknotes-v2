@@ -2,6 +2,7 @@ import "./setup" // Setup SSL configuration first
 import { ClientNavigation } from "@/components/client-navigation"
 import { ContentSection } from "@/components/content-section"
 import { MediaDetailsModal } from "@/components/media-details-modal"
+import Footer from "@/components/footer"
 import { fetchPopularMoviesWithFetch, fetchPopularTVShowsWithFetch, fetchBestsellersWithFetch } from "@/lib/fetch-helpers"
 import { fallbackMovies, fallbackTVShows, fallbackBooks } from "@/lib/fallback-data"
 import type { Metadata } from "next"
