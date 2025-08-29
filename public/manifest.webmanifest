@@ -3,7 +3,7 @@
     "background_color": "#000000",
     "display": "fullscreen",
     "scope": "/",
-    "start_url": "/movies",
+    "start_url": "/",
     "name": "ClickNotes",
     "description": "ClickNotes uses the TMDB, Google Books and NY Times API to fetch movies, tv shows and books which they can then save to their Notion databases using the Notion API.",
     "short_name": "ClickNotes",
