@@ -110,7 +110,7 @@ export default function VerificationPendingPage() {
                   onClick={handleResendVerification} 
                   disabled={isResending}
                   variant="outline"
-                  className="w-full"
+                  className="w-full hover:cursor-pointer"
                 >
                   {isResending ? (
                     <>

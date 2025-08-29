@@ -116,7 +116,7 @@ export function SignupForm({
                 <Button 
                   type="button"
                   variant="outline" 
-                  className="w-full"
+                  className="w-full hover:cursor-pointer"
                   onClick={handleGoogleSignup}
                   disabled={isLoading}
                 >
@@ -207,7 +207,7 @@ export function SignupForm({
                          {error}
                        </div>
                      )}
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full hover:cursor-pointer" disabled={isLoading}>
                   {isLoading ? "Creating account..." : "Create account"}
                 </Button>
               </div>
@@ -221,10 +221,6 @@ export function SignupForm({
           </form>
         </CardContent>
       </Card>
-      <div className="text-muted-foreground *:[a]:hover:text-primary text-center text-xs text-balance *:[a]:underline *:[a]:underline-offset-4">
-        By clicking continue, you agree to our <a href="#">Terms of Service</a>{" "}
-        and <a href="#">Privacy Policy</a>.
-      </div>
     </div>
   )
 }

@@ -267,7 +267,7 @@ export function MediaCard({ item, className }: MediaCardProps) {
     <div
       ref={cardRef}
       className={cn(
-        "group relative overflow-hidden rounded-u bg-surface border border-border/30 cursor-pointer",
+        "group relative overflow-hidden rounded-u bg-surface border border-border/30",
         className
       )}
     >
@@ -308,7 +308,7 @@ export function MediaCard({ item, className }: MediaCardProps) {
             {/* Save Button */}
             <button
               className={cn(
-                "w-12 h-12 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-110",
+                "w-12 h-12 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-110 hover:cursor-pointer",
                 "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
                 "button-slide-up delay-1 media-card-button",
                 showButtons && "show"
@@ -331,7 +331,7 @@ export function MediaCard({ item, className }: MediaCardProps) {
             {/* Mark as Watched Button */}
             <button
               className={cn(
-                "w-12 h-12 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-110",
+                "w-12 h-12 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-110 hover:cursor-pointer",
                 "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
                 "button-slide-up delay-2 media-card-button",
                 showButtons && "show"
@@ -355,7 +355,7 @@ export function MediaCard({ item, className }: MediaCardProps) {
           {/* Details Button */}
           <button
             className={cn(
-              "w-12 h-12 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-110",
+              "w-12 h-12 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-110 hover:cursor-pointer",
               "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
               "button-slide-up delay-3 media-card-button",
               showButtons && "show"

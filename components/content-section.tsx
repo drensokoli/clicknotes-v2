@@ -72,16 +72,16 @@ export function ContentSection({
       return
     }
     setInternalSearchQuery(query)
-  }, [externalSearchQuery, onSearchChange, searchResults])
+  }, [externalSearchQuery, onSearchChange])
 
   const setSearchResults = useCallback((results: MediaItem[]) => {
-    if (externalSearchResults !== undefined && onSearchChange) {
+    if (externalSearchQuery !== undefined && onSearchChange) {
       // If external state is provided, notify parent
       onSearchChange(searchQuery, results)
       return
     }
     setInternalSearchResults(results)
-  }, [externalSearchResults, onSearchChange, searchQuery])
+  }, [externalSearchQuery, onSearchChange])
 
   const [isSearching, setIsSearching] = useState(false)
   const [displayCounts, setDisplayCounts] = useState({
@@ -272,7 +272,7 @@ export function ContentSection({
       // Mark as initialized when using external state
       setIsInitialized(true)
     }
-  }, [externalActiveSection, setActiveSection, setSearchQuery, setSearchResults])
+  }, [externalActiveSection])
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -317,7 +317,7 @@ export function ContentSection({
     }, 300)
 
     return () => clearTimeout(debounceTimeout.current!)
-  }, [searchQuery, activeSection, tmdbApiKey, googleBooksApiKey, setSearchResults])
+  }, [searchQuery, activeSection, tmdbApiKey, googleBooksApiKey])
 
   const getCurrentData = (): MediaItem[] => {
     if (searchQuery.trim() && searchResults.length > 0) {
@@ -403,7 +403,7 @@ export function ContentSection({
                       setSearchQuery("")
                       setSearchResults([])
                     }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground hover:cursor-pointer transition-colors"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />

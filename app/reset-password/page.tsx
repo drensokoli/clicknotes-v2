@@ -179,7 +179,7 @@ export default function ResetPasswordPage() {
                   </div>
                 )}
                 
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full hover:cursor-pointer" disabled={isLoading}>
                   {isLoading ? "Resetting..." : "Reset Password"}
                 </Button>
               </div>

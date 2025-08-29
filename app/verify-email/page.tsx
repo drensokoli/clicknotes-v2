@@ -120,7 +120,7 @@ export default function VerifyEmailPage() {
                   <Button 
                     onClick={resendVerification} 
                     disabled={isLoading}
-                    className="w-full"
+                    className="w-full hover:cursor-pointer"
                   >
                     {isLoading ? "Sending..." : "Resend Verification Email"}
                   </Button>

@@ -4,7 +4,7 @@
   /* Light theme colors */
   --background: #f0f5ff;
   --foreground: #233876;
-  
+
   /* Custom color palette - Light mode */
   --yale-blue: #233876;
   --marian-blue: #1e429f;
@@ -16,7 +16,7 @@
   --uranian-blue: #c3ddfd;
   --alice-blue: #e1effe;
   --alice-blue-2: #f0f5ff;
-  
+
   /* Semantic colors - Light mode */
   --primary: var(--byzantine-blue);
   --primary-hover: var(--royal-blue);
@@ -32,7 +32,7 @@
   /* Dark theme colors */
   --background: #000000;
   --foreground: #ffffff;
-  
+
   /* Custom color palette - Dark mode */
   --clr-dark: #000000;
   --clr-light: #ffffff;
@@ -54,7 +54,7 @@
   --clr-surface-tonal-30: #5c5c64;
   --clr-surface-tonal-40: #75757c;
   --clr-surface-tonal-50: #8f8f95;
-  
+
   /* Semantic colors - Dark mode */
   --primary: var(--clr-primary);
   --primary-hover: var(--clr-primary-10);
@@ -87,6 +87,7 @@
     opacity: 0;
     transform: scale(0.8);
   }
+
   to {
     opacity: 1;
     transform: scale(1.1);
@@ -98,6 +99,7 @@
     opacity: 1;
     transform: scale(1.1);
   }
+
   to {
     opacity: 0;
     transform: scale(0.8);
@@ -136,7 +138,7 @@
   --color-surface-tonal-30: var(--clr-surface-tonal-30, #5c5c64);
   --color-surface-tonal-40: var(--clr-surface-tonal-40, #75757c);
   --color-surface-tonal-50: var(--clr-surface-tonal-50, #8f8f95);
-  
+
   /* Light theme specific colors */
   --color-yale-blue: var(--yale-blue, #233876);
   --color-marian-blue: var(--marian-blue, #1e429f);
@@ -174,7 +176,8 @@ html[data-theme="dark"] {
   width: fit-content;
   position: relative;
   overflow: hidden;
-  transition: all 0.3s ease 0.15s; /* Fast transition with short delay for container */
+  transition: all 0.3s ease 0.15s;
+  /* Fast transition with short delay for container */
   margin: 0;
   justify-self: flex-start;
 }
@@ -186,11 +189,12 @@ html[data-theme="dark"] {
 }
 
 /* Hide all labels by default */
-.toggle-group input[type="radio"] + label {
+.toggle-group input[type="radio"]+label {
   cursor: pointer;
   padding: 6px 8px;
   border-radius: 5px;
-  transition: all 0.4s ease 0s; /* Slightly slower than container for graceful icon transitions */
+  transition: all 0.4s ease 0s;
+  /* Slightly slower than container for graceful icon transitions */
   color: var(--foreground);
   opacity: 0;
   transform: scale(0.9);
@@ -203,7 +207,7 @@ html[data-theme="dark"] {
 }
 
 /* Show only the selected icon in the default state */
-.toggle-group input[type="radio"]:checked + label {
+.toggle-group input[type="radio"]:checked+label {
   opacity: 1;
   transform: scale(1);
   pointer-events: auto;
@@ -211,31 +215,32 @@ html[data-theme="dark"] {
   color: var(--foreground);
   box-shadow: none;
   position: static;
-  transition: all 0.3s ease 0.15s; /* Match container timing with delay */
+  transition: all 0.3s ease 0.15s;
+  /* Match container timing with delay */
 }
 
 /* Position unselected icons for hover expansion */
-.toggle-group input[id="system"] + label,
-.toggle-group input[id="system-logged-in"] + label {
+.toggle-group input[id="system"]+label,
+.toggle-group input[id="system-logged-in"]+label {
   left: 1px;
   border-radius: 5px;
 }
 
-.toggle-group input[id="light"] + label,
-.toggle-group input[id="light-logged-in"] + label {
+.toggle-group input[id="light"]+label,
+.toggle-group input[id="light-logged-in"]+label {
   left: calc(1px + 1.8rem);
   border-radius: 5px;
 }
 
-.toggle-group input[id="dark"] + label,
-.toggle-group input[id="dark-logged-in"] + label {
+.toggle-group input[id="dark"]+label,
+.toggle-group input[id="dark-logged-in"]+label {
   left: calc(1px + 3.6rem);
   border-radius: 5px;
 }
 
 /* Add 1px margin to sun icon on hover */
-.toggle-group:hover input[id="light"] + label,
-.toggle-group:hover input[id="light-logged-in"] + label {
+.toggle-group:hover input[id="light"]+label,
+.toggle-group:hover input[id="light-logged-in"]+label {
   margin: 0 1px;
 }
 
@@ -249,22 +254,23 @@ html[data-theme="dark"] {
 }
 
 /* Show icons with delay after container expands */
-.toggle-group:hover input[type="radio"] + label {
+.toggle-group:hover input[type="radio"]+label {
   opacity: 1;
   transform: scale(1);
   pointer-events: auto;
   position: static;
-  transition: all 0.4s ease 0.1s; /* 0.1s delay after container expands */
+  transition: all 0.4s ease 0.1s;
+  /* 0.1s delay after container expands */
 }
 
-.toggle-group:hover input[type="radio"]:not(:checked) + label {
+.toggle-group:hover input[type="radio"]:not(:checked)+label {
   background-color: transparent;
   color: var(--foreground);
   transition: all 0.4s ease 0.1s;
 }
 
 /* Selected item gets primary color on hover */
-.toggle-group:hover input[type="radio"]:checked + label {
+.toggle-group:hover input[type="radio"]:checked+label {
   background-color: var(--primary);
   color: white;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
@@ -272,12 +278,12 @@ html[data-theme="dark"] {
 }
 
 /* Ensure icons are white when parent has primary background */
-.toggle-group:hover input[type="radio"]:checked + label svg {
+.toggle-group:hover input[type="radio"]:checked+label svg {
   color: white !important;
   fill: white !important;
 }
 
-.toggle-group:hover input[type="radio"]:not(:checked) + label:hover {
+.toggle-group:hover input[type="radio"]:not(:checked)+label:hover {
   background-color: rgba(0, 0, 0, 0.08);
   color: var(--foreground);
   transition: all 0.3s ease 0.1s;
@@ -288,7 +294,7 @@ html[data-theme="dark"] {
   border-color: var(--clr-surface-20);
 }
 
-[data-theme="dark"] .toggle-group:hover input[type="radio"]:not(:checked) + label:hover {
+[data-theme="dark"] .toggle-group:hover input[type="radio"]:not(:checked)+label:hover {
   background-color: rgba(255, 255, 255, 0.08);
 }
 
@@ -301,7 +307,8 @@ html[data-theme="dark"] {
 }
 
 .toggle-container:hover {
-  gap: 4px; /* 1px gap equivalent in spacing */
+  gap: 4px;
+  /* 1px gap equivalent in spacing */
 }
 
 .theme-text {
@@ -314,7 +321,8 @@ html[data-theme="dark"] {
 
 .toggle-container:hover .theme-text {
   opacity: 1;
-  transform: translateX(4px); /* Move text to create visual gap */
+  transform: translateX(4px);
+  /* Move text to create visual gap */
 }
 
 /* Ensure smooth transitions for all elements */
@@ -324,7 +332,7 @@ html[data-theme="dark"] {
 }
 
 /* Ensure the selected icon is always visible and positioned correctly */
-.toggle-group input[type="radio"]:checked + label {
+.toggle-group input[type="radio"]:checked+label {
   z-index: 10;
 }
 
@@ -436,36 +444,62 @@ html[data-theme="dark"] {
 
 /* Custom color utility classes */
 .theme-bg-blue-red {
-  background-color: #3b82f6; /* blue-500 */
+  background-color: #3b82f6;
+  /* blue-500 */
 }
 
 .theme-bg-blue-red:hover {
-  background-color: #2563eb; /* blue-600 */
+  background-color: #2563eb;
+  /* blue-600 */
 }
 
 .theme-text-blue-red {
-  color: #3b82f6; /* blue-500 */
+  color: #3b82f6;
+  /* blue-500 */
 }
 
 .theme-border-blue-red {
-  border-color: #3b82f6; /* blue-500 */
+  border-color: #3b82f6;
+  /* blue-500 */
 }
 
 /* Dark theme variants */
 [data-theme="dark"] .theme-bg-blue-red {
-  background-color: #ef4444; /* red-500 */
+  background-color: #ef4444;
+  /* red-500 */
 }
 
 [data-theme="dark"] .theme-bg-blue-red:hover {
-  background-color: #dc2626; /* red-600 */
+  background-color: #dc2626;
+  /* red-600 */
 }
 
 [data-theme="dark"] .theme-text-blue-red {
-  color: #ef4444; /* red-500 */
+  color: #ef4444;
+  /* red-500 */
 }
 
 [data-theme="dark"] .theme-border-blue-red {
-  border-color: #ef4444; /* red-500 */
+  border-color: #ef4444;
+  /* red-500 */
+}
+
+/* Custom hover utility classes for dropdown buttons */
+.theme-hover-light {
+  background-color: #f0f5ff;
+}
+
+.theme-hover-light:hover {
+  background-color: #e5ebf6;
+  /* gray-100 */
+}
+
+[data-theme="dark"] .theme-hover-light {
+  background-color: #000000;
+}
+
+[data-theme="dark"] .theme-hover-light:hover {
+  background-color: #141414;
 }
 
 /* Smooth theme transitions for media card buttons */
@@ -496,6 +530,7 @@ body {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -506,6 +541,7 @@ body {
     transform: translateY(1rem);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;
@@ -517,6 +553,7 @@ body {
     transform: translateY(0.5rem);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;

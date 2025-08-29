@@ -32,9 +32,9 @@ export function PasswordInput({
         title={showPassword ? "Hide password" : "Show password"}
       >
         {showPassword ? (
-          <EyeOff className="h-4 w-4 text-muted-foreground" />
+          <EyeOff className="h-4 w-4 text-muted-foreground hover:cursor-pointer" />
         ) : (
-          <Eye className="h-4 w-4 text-muted-foreground" />
+          <Eye className="h-4 w-4 text-muted-foreground hover:cursor-pointer" />
         )}
       </Button>
     </div>

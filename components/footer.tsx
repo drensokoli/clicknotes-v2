@@ -3,21 +3,30 @@ import Link from 'next/link';
 
 const Footer: React.FC = () => {
   return (
-    <footer className="bg-background p-4 bottom-0 w-full flex flex-col items-center justify-center">
-      <h1 className='text-md'>Made with ❤️ by
-        <span className="text-blue-600">
-          <Link href="https://linktr.ee/drensokoli" target="_blank" aria-label='Dren Sokoli LinkedIn Profile'> Dren Sokoli</Link>
-        </span>
-      </h1>
-      <p className="mr-2 text-md">
-        &copy; {new Date().getFullYear()}{' '}
-        <span className="text-blue-600">
-          <Link href="https://github.com/drensokoli/clicknotes-v2" target="_blank" aria-label='ClickNotes v2 GitHub Repo'>ClickNotes v2</Link>
-        </span>
-      </p>
-      <div className='flex flex-row gap-4 pt-2'>
-        <Link href="/privacy-policy.html" target="_blank" aria-label='Privacy Policy' className='text-sm text-blue-600 hover:underline'>Privacy Policy</Link>
-        <Link href="/terms-and-conditions.html" target="_blank" aria-label='Terms and Conditions' className='text-sm text-blue-600 hover:underline'>Terms of Use</Link>
+    <footer className="bg-background p-4 bottom-0 w-full flex flex-col items-center justify-center gap-2">
+      <div className="text-muted-foreground *:[a]:hover:text-primary text-center text-xs text-balance *:[a]:underline *:[a]:underline-offset-4">
+        Made with ❤️ by{" "}
+        <Link
+          href="https://linktr.ee/drensokoli"
+          target="_blank"
+          aria-label="Dren Sokoli Linktree Profile"
+        >
+          Dren Sokoli
+        </Link>
+      </div>
+      <div className="text-muted-foreground *:[a]:hover:text-primary text-center text-xs text-balance *:[a]:underline *:[a]:underline-offset-4">
+        &copy; {new Date().getFullYear()}{" "}
+        <Link
+          href="https://github.com/drensokoli/clicknotes-v2"
+          target="_blank"
+          aria-label="ClickNotes v2 GitHub Repo"
+        >
+          ClickNotes v2
+        </Link>
+      </div>
+      <div className="text-muted-foreground *:[a]:hover:text-primary text-center text-xs text-balance *:[a]:underline *:[a]:underline-offset-4">
+        <Link href="/terms-and-conditions.html" target="_blank" aria-label='Terms and Conditions'>Terms of Service</Link>{" "}
+        and <Link href="/privacy-policy.html" target="_blank" aria-label='Privacy Policy'>Privacy Policy</Link>
       </div>
     </footer>
   );

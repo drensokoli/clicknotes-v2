@@ -138,14 +138,14 @@ export function PWAInstallToast() {
               </div>
               <button
                 onClick={dismissToast}
-                className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors ml-2 flex-shrink-0"
+                className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors ml-2 flex-shrink-0 hover:cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <button
               onClick={handleInstall}
-              className="w-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-medium py-2.5 px-4 rounded-md transition-colors"
+              className="w-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-medium py-2.5 px-4 rounded-md transition-colors hover:cursor-pointer"
             >
               Install
             </button>
@@ -166,7 +166,7 @@ export function PWAInstallToast() {
                   localStorage.setItem('pwa-first-visit', 'true')
                   localStorage.setItem('pwa-toast-dismissed-timestamp', Date.now().toString())
                 }}
-                className="text-[var(--muted)] hover:text-[var(--foreground)]"
+                className="text-[var(--muted)] hover:text-[var(--foreground)] hover:cursor-pointer"
               >
                 <X className="w-6 h-6" />
               </button>
@@ -242,7 +242,7 @@ export function PWAInstallToast() {
                 localStorage.setItem('pwa-first-visit', 'true')
                 localStorage.setItem('pwa-toast-dismissed-timestamp', Date.now().toString())
               }}
-              className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+              className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors hover:cursor-pointer"
             >
               Got it!
             </button>
@@ -261,14 +261,14 @@ export function PWAInstallToast() {
               </div>
               <button
                 onClick={dismissToast}
-                className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors ml-2 flex-shrink-0"
+                className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors ml-2 flex-shrink-0 hover:cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <button
               onClick={handleIOSInstall}
-              className="w-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-medium py-2.5 px-4 rounded-md transition-colors"
+              className="w-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-medium py-2.5 px-4 rounded-md transition-colors hover:cursor-pointer"
             >
               How to Install
             </button>

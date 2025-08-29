@@ -124,7 +124,8 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
                         "sm:hover:scale-105", // Scale effect only on desktop hover
                         "active:scale-95", // Scale down on click for all devices
                         !onSectionChange && "cursor-not-allowed opacity-60",
-                        isActive ? "text-primary" : "text-gray-500 hover:text-foreground"
+                        isActive ? "text-primary" : "text-gray-500 hover:text-foreground",
+                        "hover:cursor-pointer"
                       )}
                     >
                       <Icon className="h-4 w-4" />
@@ -170,7 +171,8 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
                               !onSectionChange && "cursor-not-allowed opacity-60",
                               isActive
                                 ? "text-primary scale-110 bg-primary/10"
-                                : "text-gray-500 hover:text-foreground"
+                                : "text-gray-500 hover:text-foreground",
+                              "hover:cursor-pointer"
                             )}
                           >
                             <Icon className="h-5 w-5" />
