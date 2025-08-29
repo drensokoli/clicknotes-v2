@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
@@ -7,10 +7,24 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Analytics } from "@vercel/analytics/next"
 import Footer from "@/components/footer"
+import { PWAInstallToast } from "@/components/pwa-install-toast"
 
 export const metadata: Metadata = {
   title: "ClickNotes v2",
   description: "Save and organize your favorite movies, TV shows, and books",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "ClickNotes",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#000000",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default async function RootLayout({
@@ -34,9 +48,10 @@ export default async function RootLayout({
               {children}
               <Analytics />
             </ModalProvider>
+            <Footer />
+            <PWAInstallToast />
           </ThemeProvider>
         </AuthProvider>
-        <Footer />
       </body>
     </html>
   );

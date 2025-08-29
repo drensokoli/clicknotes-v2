@@ -49,13 +49,13 @@ export function ContentSection({
   // Use external state if provided, otherwise use internal state
   const [internalActiveSection, setInternalActiveSection] = useState<Section>("movies")
   const activeSection = externalActiveSection ?? internalActiveSection
-  const setActiveSection = (section: Section) => {
+  const setActiveSection = useCallback((section: Section) => {
     if (externalActiveSection !== undefined) {
       // If external state is provided, don't update internal state
       return
     }
     setInternalActiveSection(section)
-  }
+  }, [externalActiveSection])
 
   const [isInitialized, setIsInitialized] = useState(false)
 
@@ -65,23 +65,23 @@ export function ContentSection({
   const searchQuery = externalSearchQuery ?? internalSearchQuery
   const searchResults = externalSearchResults ?? internalSearchResults
 
-  const setSearchQuery = (query: string) => {
+  const setSearchQuery = useCallback((query: string) => {
     if (externalSearchQuery !== undefined && onSearchChange) {
       // If external state is provided, notify parent
       onSearchChange(query, searchResults)
       return
     }
     setInternalSearchQuery(query)
-  }
+  }, [externalSearchQuery, onSearchChange, searchResults])
 
-  const setSearchResults = (results: MediaItem[]) => {
+  const setSearchResults = useCallback((results: MediaItem[]) => {
     if (externalSearchResults !== undefined && onSearchChange) {
       // If external state is provided, notify parent
       onSearchChange(searchQuery, results)
       return
     }
     setInternalSearchResults(results)
-  }
+  }, [externalSearchResults, onSearchChange, searchQuery])
 
   const [isSearching, setIsSearching] = useState(false)
   const [displayCounts, setDisplayCounts] = useState({
@@ -272,7 +272,7 @@ export function ContentSection({
       // Mark as initialized when using external state
       setIsInitialized(true)
     }
-  }, [externalActiveSection])
+  }, [externalActiveSection, setActiveSection, setSearchQuery, setSearchResults])
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -317,7 +317,7 @@ export function ContentSection({
     }, 300)
 
     return () => clearTimeout(debounceTimeout.current!)
-  }, [searchQuery, activeSection, tmdbApiKey, googleBooksApiKey])
+  }, [searchQuery, activeSection, tmdbApiKey, googleBooksApiKey, setSearchResults])
 
   const getCurrentData = (): MediaItem[] => {
     if (searchQuery.trim() && searchResults.length > 0) {
