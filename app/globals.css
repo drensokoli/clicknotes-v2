@@ -81,6 +81,41 @@
   --font-mono: "Courier New", Courier, monospace;
 }
 
+/* Mobile Navigation Animations */
+@keyframes mobile-nav-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes mobile-nav-fade-out {
+  from {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+.mobile-nav-enter {
+  animation: mobile-nav-fade-in 0.3s ease-out forwards;
+}
+
+.mobile-nav-exit {
+  animation: mobile-nav-fade-out 0.3s ease-in forwards;
+}
+
+.mobile-nav-swipe-hint {
+  animation: pulse 2s infinite;
+}
+
 /* Additional Tailwind custom colors for dark theme */
 @theme inline {
   --color-dark: var(--clr-dark, #000000);
@@ -127,6 +162,310 @@ html {
 
 html[data-theme="dark"] {
   color-scheme: dark;
+}
+
+/* Three-way toggle group styles */
+.toggle-group {
+  border: none;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 1px;
+  width: fit-content;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease 0.15s; /* Fast transition with short delay for container */
+  margin: 0;
+  justify-self: flex-start;
+}
+
+/* Hide the default radio button */
+.toggle-group input[type="radio"] {
+  opacity: 0;
+  position: absolute;
+}
+
+/* Hide all labels by default */
+.toggle-group input[type="radio"] + label {
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 5px;
+  transition: all 0.4s ease 0s; /* Slightly slower than container for graceful icon transitions */
+  color: var(--foreground);
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
+  position: absolute;
+  left: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Show only the selected icon in the default state */
+.toggle-group input[type="radio"]:checked + label {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+  background-color: transparent;
+  color: var(--foreground);
+  box-shadow: none;
+  position: static;
+  transition: all 0.3s ease 0.15s; /* Match container timing with delay */
+}
+
+/* Position unselected icons for hover expansion */
+.toggle-group input[id="system"] + label,
+.toggle-group input[id="system-logged-in"] + label {
+  left: 1px;
+  border-radius: 5px;
+}
+
+.toggle-group input[id="light"] + label,
+.toggle-group input[id="light-logged-in"] + label {
+  left: calc(1px + 1.8rem);
+  border-radius: 5px;
+}
+
+.toggle-group input[id="dark"] + label,
+.toggle-group input[id="dark-logged-in"] + label {
+  left: calc(1px + 3.6rem);
+  border-radius: 5px;
+}
+
+/* Add 1px margin to sun icon on hover */
+.toggle-group:hover input[id="light"] + label,
+.toggle-group:hover input[id="light-logged-in"] + label {
+  margin: 0 1px;
+}
+
+/* On hover, expand container first, then show icons */
+.toggle-group:hover {
+  width: auto;
+  padding: 1px;
+  margin-right: 4px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+/* Show icons with delay after container expands */
+.toggle-group:hover input[type="radio"] + label {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+  position: static;
+  transition: all 0.4s ease 0.1s; /* 0.1s delay after container expands */
+}
+
+.toggle-group:hover input[type="radio"]:not(:checked) + label {
+  background-color: transparent;
+  color: var(--foreground);
+  transition: all 0.4s ease 0.1s;
+}
+
+/* Selected item gets primary color on hover */
+.toggle-group:hover input[type="radio"]:checked + label {
+  background-color: var(--primary);
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.4s ease 0.1s;
+}
+
+/* Ensure icons are white when parent has primary background */
+.toggle-group:hover input[type="radio"]:checked + label svg {
+  color: white !important;
+  fill: white !important;
+}
+
+.toggle-group:hover input[type="radio"]:not(:checked) + label:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+  color: var(--foreground);
+  transition: all 0.3s ease 0.1s;
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .toggle-group:hover {
+  border-color: var(--clr-surface-20);
+}
+
+[data-theme="dark"] .toggle-group:hover input[type="radio"]:not(:checked) + label:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Toggle container with theme text */
+.toggle-container {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  transition: all 0.3s ease;
+}
+
+.toggle-container:hover {
+  gap: 4px; /* 1px gap equivalent in spacing */
+}
+
+.theme-text {
+  opacity: 1;
+  transform: translateX(0);
+  transition: all 0.3s ease;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.toggle-container:hover .theme-text {
+  opacity: 1;
+  transform: translateX(4px); /* Move text to create visual gap */
+}
+
+/* Ensure smooth transitions for all elements */
+.toggle-group *,
+.toggle-group:hover * {
+  transition: all 0.4s ease;
+}
+
+/* Ensure the selected icon is always visible and positioned correctly */
+.toggle-group input[type="radio"]:checked + label {
+  z-index: 10;
+}
+
+/* Custom theme utility classes */
+.theme-bg-surface {
+  background-color: var(--surface);
+}
+
+.theme-bg-white {
+  background-color: var(--surface);
+}
+
+.theme-bg-gray-50 {
+  background-color: var(--surface-elevated);
+}
+
+.theme-bg-gray-100 {
+  background-color: var(--alice-blue);
+}
+
+.theme-bg-gray-800 {
+  background-color: var(--clr-surface);
+}
+
+.theme-bg-gray-900 {
+  background-color: var(--clr-surface-10);
+}
+
+.theme-text-foreground {
+  color: var(--foreground);
+}
+
+.theme-text-black {
+  color: var(--foreground);
+}
+
+.theme-text-white {
+  color: var(--clr-light);
+}
+
+.theme-text-gray-600 {
+  color: var(--muted);
+}
+
+.theme-text-gray-300 {
+  color: var(--muted);
+}
+
+.theme-border-gray-200 {
+  border-color: var(--border);
+}
+
+.theme-border-gray-700 {
+  border-color: var(--clr-surface-30);
+}
+
+/* Apply dark theme colors when data-theme="dark" */
+[data-theme="dark"] .theme-bg-surface {
+  background-color: var(--clr-surface);
+}
+
+[data-theme="dark"] .theme-bg-white {
+  background-color: var(--clr-surface);
+}
+
+[data-theme="dark"] .theme-bg-gray-50 {
+  background-color: var(--clr-surface-10);
+}
+
+[data-theme="dark"] .theme-bg-gray-100 {
+  background-color: var(--clr-surface-20);
+}
+
+[data-theme="dark"] .theme-bg-gray-800 {
+  background-color: var(--clr-surface);
+}
+
+[data-theme="dark"] .theme-bg-gray-900 {
+  background-color: var(--clr-surface-10);
+}
+
+[data-theme="dark"] .theme-text-foreground {
+  color: var(--clr-light);
+}
+
+[data-theme="dark"] .theme-text-black {
+  color: var(--clr-light);
+}
+
+[data-theme="dark"] .theme-text-white {
+  color: var(--clr-light);
+}
+
+[data-theme="dark"] .theme-text-gray-600 {
+  color: var(--clr-surface-40);
+}
+
+[data-theme="dark"] .theme-text-gray-300 {
+  color: var(--clr-surface-50);
+}
+
+[data-theme="dark"] .theme-border-gray-200 {
+  border-color: var(--clr-surface-20);
+}
+
+[data-theme="dark"] .theme-border-gray-700 {
+  border-color: var(--clr-surface-30);
+}
+
+/* Custom color utility classes */
+.theme-bg-blue-red {
+  background-color: #3b82f6; /* blue-500 */
+}
+
+.theme-bg-blue-red:hover {
+  background-color: #2563eb; /* blue-600 */
+}
+
+.theme-text-blue-red {
+  color: #3b82f6; /* blue-500 */
+}
+
+.theme-border-blue-red {
+  border-color: #3b82f6; /* blue-500 */
+}
+
+/* Dark theme variants */
+[data-theme="dark"] .theme-bg-blue-red {
+  background-color: #ef4444; /* red-500 */
+}
+
+[data-theme="dark"] .theme-bg-blue-red:hover {
+  background-color: #dc2626; /* red-600 */
+}
+
+[data-theme="dark"] .theme-text-blue-red {
+  color: #ef4444; /* red-500 */
+}
+
+[data-theme="dark"] .theme-border-blue-red {
+  border-color: #ef4444; /* red-500 */
 }
 
 /* Smooth theme transitions for media card buttons */

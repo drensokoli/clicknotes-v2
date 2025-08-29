@@ -4,8 +4,6 @@ import * as React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { MediaCard, MediaItem, Movie, TVShow, Book } from "./media-card"
 import { searchContentByTitle, searchBooksByTitle } from "@/lib/api-helpers"
-import { Film, Tv, BookOpen } from "lucide-react"
-import { cn } from "@/lib/utils"
 import { useModal } from "./modal-provider"
 
 type Section = "movies" | "tvshows" | "books"
@@ -22,15 +20,24 @@ interface ContentSectionProps {
     tvshows: number
     books: number
   }
+  // External state management props
+  externalActiveSection?: Section
+  externalSearchQuery?: string
+  externalSearchResults?: MediaItem[]
+  onSearchChange?: (query: string, results: MediaItem[]) => void
 }
 
-export function ContentSection({ 
-  initialMovies, 
-  initialTVShows, 
-  initialBooks, 
-  tmdbApiKey, 
+export function ContentSection({
+  initialMovies,
+  initialTVShows,
+  initialBooks,
+  tmdbApiKey,
   googleBooksApiKey,
-  redisKeysFetched = { movies: 1, tvshows: 1, books: 1 }
+  redisKeysFetched = { movies: 1, tvshows: 1, books: 1 },
+  externalActiveSection,
+  externalSearchQuery,
+  externalSearchResults,
+  onSearchChange
 }: ContentSectionProps) {
   const { setTmdbApiKey } = useModal()
   
@@ -39,10 +46,43 @@ export function ContentSection({
     setTmdbApiKey(tmdbApiKey)
   }, [tmdbApiKey, setTmdbApiKey])
   
-  const [activeSection, setActiveSection] = useState<Section>("movies")
+  // Use external state if provided, otherwise use internal state
+  const [internalActiveSection, setInternalActiveSection] = useState<Section>("movies")
+  const activeSection = externalActiveSection ?? internalActiveSection
+  const setActiveSection = (section: Section) => {
+    if (externalActiveSection !== undefined) {
+      // If external state is provided, don't update internal state
+      return
+    }
+    setInternalActiveSection(section)
+  }
+
   const [isInitialized, setIsInitialized] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [searchResults, setSearchResults] = useState<MediaItem[]>([])
+
+  // Use external search state if provided, otherwise use internal state
+  const [internalSearchQuery, setInternalSearchQuery] = useState("")
+  const [internalSearchResults, setInternalSearchResults] = useState<MediaItem[]>([])
+  const searchQuery = externalSearchQuery ?? internalSearchQuery
+  const searchResults = externalSearchResults ?? internalSearchResults
+
+  const setSearchQuery = (query: string) => {
+    if (externalSearchQuery !== undefined && onSearchChange) {
+      // If external state is provided, notify parent
+      onSearchChange(query, searchResults)
+      return
+    }
+    setInternalSearchQuery(query)
+  }
+
+  const setSearchResults = (results: MediaItem[]) => {
+    if (externalSearchResults !== undefined && onSearchChange) {
+      // If external state is provided, notify parent
+      onSearchChange(searchQuery, results)
+      return
+    }
+    setInternalSearchResults(results)
+  }
+
   const [isSearching, setIsSearching] = useState(false)
   const [displayCounts, setDisplayCounts] = useState({
     movies: 20,
@@ -208,28 +248,31 @@ export function ContentSection({
   }, [activeSection, isLoading, isLoadingNextPage, searchQuery, isInitialized, displayCounts, allMediaData, loadMore]);
 
   useEffect(() => {
-    // Check initial hash
-    const hash = window.location.hash.slice(1) as Section
-    if (hash && ["movies", "tvshows", "books"].includes(hash)) {
-      setActiveSection(hash)
-    }
-    
-    // Mark as initialized after processing initial hash
-    setIsInitialized(true)
-
-    // Listen for hash changes
-    const handleHashChange = () => {
-      const newHash = window.location.hash.slice(1) as Section
-      if (newHash && ["movies", "tvshows", "books"].includes(newHash)) {
-        setActiveSection(newHash)
-        setSearchQuery("")
-        setSearchResults([])
+    // Only handle hash changes if we're not using external state management
+    if (externalActiveSection === undefined) {
+      // Check initial hash
+      const hash = window.location.hash.slice(1) as Section
+      if (hash && ["movies", "tvshows", "books"].includes(hash)) {
+        setActiveSection(hash)
       }
-    }
 
-    window.addEventListener("hashchange", handleHashChange)
-    return () => window.removeEventListener("hashchange", handleHashChange)
-  }, [])
+      // Listen for hash changes
+      const handleHashChange = () => {
+        const newHash = window.location.hash.slice(1) as Section
+        if (newHash && ["movies", "tvshows", "books"].includes(newHash)) {
+          setActiveSection(newHash)
+          setSearchQuery("")
+          setSearchResults([])
+        }
+      }
+
+      window.addEventListener("hashchange", handleHashChange)
+      return () => window.removeEventListener("hashchange", handleHashChange)
+    } else {
+      // Mark as initialized when using external state
+      setIsInitialized(true)
+    }
+  }, [externalActiveSection])
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -313,32 +356,62 @@ export function ContentSection({
     }
   }
 
-  const navItems = [
-    { id: "movies" as Section, label: "Movies", icon: Film },
-    { id: "tvshows" as Section, label: "TV", icon: Tv },
-    { id: "books" as Section, label: "Books", icon: BookOpen },
-  ]
+
   
   // Don't render until hash is processed to prevent flash
-  if (!isInitialized) {
+  // Also wait for external active section if using external state management
+  if (!isInitialized || (externalActiveSection !== undefined && activeSection === undefined)) {
     return (
       <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12">
-        {/* Header Skeleton */}
+        {/* Header */}
         <div className="mb-8 sm:mb-12">
-          {/* Navigation Skeleton */}
-          <div className="flex items-center justify-center text-sm sm:text-base mb-8">
-            <div className="flex items-center space-x-6">
-              <div className="h-6 w-16 bg-gray-100 dark:bg-gray-400 rounded animate-pulse"></div>
-              <div className="h-4 w-px bg-gray-200 dark:bg-gray-400"></div>
-              <div className="h-6 w-16 bg-gray-100 dark:bg-gray-400 rounded animate-pulse"></div>
-              <div className="h-4 w-px bg-gray-200 dark:bg-gray-400"></div>
-              <div className="h-6 w-16 bg-gray-100 dark:bg-gray-400 rounded animate-pulse"></div>
-            </div>
-          </div>
-          
-          {/* Search Bar Skeleton */}
-          <div className="mx-4 sm:mx-auto max-w-2xl">
-            <div className="h-12 w-full bg-gray-100 dark:bg-gray-400 rounded-lg animate-pulse"></div>
+          {/* Search Bar */}
+          <div className="mx-4 sm:mx-auto max-w-2xl animate-in fade-in slide-in-from-bottom-2 duration-300 delay-100">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              // Keep the search query when Enter is pressed
+              // The search is already handled by onChange, so we just prevent form submission
+            }}>
+              <div className="relative">
+                <svg 
+                  className="w-5 h-5 text-muted-foreground absolute top-3.5 left-4 theme-text-gray-300" 
+                  fill="currentColor" 
+                  viewBox="0 0 18 18"
+                >
+                  <path 
+                    fillRule="evenodd" 
+                    d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" 
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      // Keep the search query when Enter is pressed
+                    }
+                  }}
+                  className="h-12 w-full px-12 rounded-lg focus:outline-none hover:cursor-pointer border-2 border-primary bg-white dark:bg-surface shadow-xl"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery("")
+                      setSearchResults([])
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </form>
           </div>
         </div>
 
@@ -359,37 +432,6 @@ export function ContentSection({
     <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12">
       {/* Header */}
       <div className="mb-8 sm:mb-12">
-        {/* Simple Navigation */}
-        <div className="flex items-center justify-center text-sm sm:text-base mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          {navItems.map((item, index) => {
-            const Icon = item.icon
-            const isActive = activeSection === item.id
-            
-            return (
-              <div key={item.id} className="flex items-center">
-                {index > 0 && <div className="h-4 w-px bg-gray-400 dark:bg-gray-400 mx-6 opacity-40" />}
-                <button
-                  onClick={() => {
-                    setActiveSection(item.id)
-                    window.location.hash = item.id
-                    setSearchQuery("")
-                    setSearchResults([])
-                  }}
-                  className={cn(
-                    "flex items-center gap-2 transition-all duration-300",
-                    "sm:hover:scale-105", // Scale effect only on desktop hover
-                    "active:scale-95", // Scale down on click for all devices
-                    isActive ? "text-primary" : "text-gray-500 hover:text-foreground"
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="font-semibold">{item.label}</span>
-                </button>
-              </div>
-            )
-          })}
-        </div>
-
         {/* Search Bar */}
         <div className="mx-4 sm:mx-auto max-w-2xl animate-in fade-in slide-in-from-bottom-2 duration-300 delay-100">
           <form onSubmit={(e) => {
@@ -399,7 +441,7 @@ export function ContentSection({
           }}>
             <div className="relative">
               <svg 
-                className="w-5 h-5 text-muted-foreground absolute top-3.5 left-4" 
+                className="w-5 h-5 text-muted-foreground absolute top-3.5 left-4 theme-text-gray-300" 
                 fill="currentColor" 
                 viewBox="0 0 18 18"
               >

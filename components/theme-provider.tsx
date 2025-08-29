@@ -6,10 +6,10 @@ import type { ThemeProviderProps } from "next-themes"
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   return (
-    <NextThemesProvider 
+    <NextThemesProvider
       {...props}
-      enableSystem={false}
-      disableTransitionOnChange={false}
+      enableSystem={true}
+      disableTransitionOnChange={true}
       attribute="data-theme"
     >
       {children}

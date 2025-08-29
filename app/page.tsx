@@ -1,6 +1,5 @@
 import "./setup" // Setup SSL configuration first
-import { ClientNavigation } from "@/components/client-navigation"
-import { ContentSection } from "@/components/content-section"
+import { MainContent } from "@/components/main-content"
 import { MediaDetailsModal } from "@/components/media-details-modal"
 import Footer from "@/components/footer"
 import { fetchPopularMoviesWithFetch, fetchPopularTVShowsWithFetch, fetchBestsellersWithFetch } from "@/lib/fetch-helpers"
@@ -318,20 +317,15 @@ export default async function Home() {
       
       {/* Content */}
       <div className="relative z-10">
-        <ClientNavigation />
-        <main>
-          <ContentSection 
-            initialMovies={movies}
-            initialTVShows={tvShows}
-            initialBooks={books}
-            tmdbApiKey={tmdbApiKey}
-            googleBooksApiKey={googleBooksApiKey}
-            redisKeysFetched={redisKeysFetched}
-          />
-          <MediaDetailsModal 
-            omdbApiKeys={omdbApiKeys}
-          />
-        </main>
+        <MainContent
+          initialMovies={movies}
+          initialTVShows={tvShows}
+          initialBooks={books}
+          tmdbApiKey={tmdbApiKey}
+          googleBooksApiKey={googleBooksApiKey}
+          redisKeysFetched={redisKeysFetched}
+          omdbApiKeys={omdbApiKeys}
+        />
       </div>
     </div>
   )

@@ -28,7 +28,7 @@ export default async function RootLayout({
             attribute="data-theme"
             defaultTheme="light"
             enableSystem={false}
-            disableTransitionOnChange={false}
+            disableTransitionOnChange={true}
           >
             <ModalProvider>
               {children}
