@@ -30,12 +30,17 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
   const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [showSwipeHint, setShowSwipeHint] = useState(false)
+  const [isInitialAnimation, setIsInitialAnimation] = useState(false)
+  const [hasRunInitialAnimation, setHasRunInitialAnimation] = useState(false)
 
   // Handle carousel slide changes
   useEffect(() => {
     if (!carouselApi) return
 
     const onSelect = () => {
+      // Don't trigger section changes during initial animation
+      if (isInitialAnimation) return
+
       const selectedIndex = carouselApi.selectedScrollSnap()
       const selectedItem = navItems[selectedIndex]
       if (selectedItem && selectedItem.id !== activeSection && onSectionChange) {
@@ -54,7 +59,7 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
     return () => {
       carouselApi.off('select', onSelect)
     }
-  }, [carouselApi, activeSection, onSectionChange, navItems])
+  }, [carouselApi, activeSection, onSectionChange, navItems, isInitialAnimation])
 
   // Auto-hide swipe hint after 4 seconds
   useEffect(() => {
@@ -75,6 +80,49 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
       }
     }
   }, [activeSection, carouselApi, navItems])
+
+  // Initial animation on page load
+  useEffect(() => {
+    if (!carouselApi || isInitialAnimation || hasRunInitialAnimation) return
+
+    const runInitialAnimation = async () => {
+      setIsInitialAnimation(true)
+
+      const totalItems = navItems.length
+
+      // Phase 1: Extremely fast scrolling through 3 complete cycles
+      for (let cycle = 0; cycle < 3; cycle++) {
+        for (let i = 0; i < totalItems; i++) {
+          await new Promise(resolve => setTimeout(resolve, 4)) // Extremely fast: 4ms per item
+          if (carouselApi) {
+            carouselApi.scrollTo(i)
+          }
+        }
+      }
+
+      // Phase 2: Quick slow-down to current active section
+      const targetIndex = activeSection ? navItems.findIndex(item => item.id === activeSection) : 0
+
+      for (let i = 0; i <= targetIndex; i++) {
+        const delay = 8 + (i * 4) // Extremely fast deceleration: 8ms, 12ms, 16ms
+        await new Promise(resolve => setTimeout(resolve, delay))
+        if (carouselApi) {
+          carouselApi.scrollTo(i)
+        }
+      }
+
+      // Enable interactions immediately after reaching target
+      setIsInitialAnimation(false)
+      setHasRunInitialAnimation(true)
+      // Show swipe hint after animation completes
+      setShowSwipeHint(true)
+    }
+
+    // Start animation immediately when carousel is ready
+    const timer = setTimeout(runInitialAnimation, 100) // Near-instant start
+
+    return () => clearTimeout(timer)
+  }, [carouselApi, isInitialAnimation, navItems, hasRunInitialAnimation])
 
   return (
     <>
@@ -109,7 +157,7 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
                     {index > 0 && <div className="h-4 w-px bg-gray-400 dark:bg-gray-400 mx-6 opacity-40" />}
                     <button
                       onClick={() => {
-                        if (onSectionChange) {
+                        if (onSectionChange && !isInitialAnimation) {
                           // Show swipe hint on mobile when clicking navigation
                           if (window.innerWidth < 640) {
                             setShowSwipeHint(true)
@@ -118,12 +166,12 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
                           window.location.hash = item.id
                         }
                       }}
-                      disabled={!onSectionChange}
+                      disabled={!onSectionChange || isInitialAnimation}
                       className={cn(
                         "flex items-center gap-2 px-2 py-1 transition-all duration-300",
                         "sm:hover:scale-105", // Scale effect only on desktop hover
                         "active:scale-95", // Scale down on click for all devices
-                        !onSectionChange && "cursor-not-allowed opacity-60",
+                        (!onSectionChange || isInitialAnimation) && "cursor-not-allowed opacity-60",
                         isActive ? "text-primary" : "text-gray-500 hover:text-foreground",
                         "hover:cursor-pointer"
                       )}
@@ -157,18 +205,18 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
                         <div className="flex items-center justify-center">
                           <button
                             onClick={() => {
-                              if (onSectionChange && !isTransitioning) {
+                              if (onSectionChange && !isTransitioning && !isInitialAnimation) {
                                 // Show swipe hint when clicking navigation on mobile
                                 setShowSwipeHint(true)
                                 onSectionChange(item.id)
                                 window.location.hash = item.id
                               }
                             }}
-                            disabled={!onSectionChange || isTransitioning}
+                            disabled={!onSectionChange || isTransitioning || isInitialAnimation}
                             className={cn(
                               "flex items-center justify-center w-12 h-12 rounded-full transition-all duration-300 m-2",
                               "active:scale-95",
-                              !onSectionChange && "cursor-not-allowed opacity-60",
+                              (!onSectionChange || isInitialAnimation) && "cursor-not-allowed opacity-60",
                               isActive
                                 ? "text-primary scale-110 bg-primary/10"
                                 : "text-gray-500 hover:text-foreground",
@@ -196,9 +244,9 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
 
     {/* Swipe hint badge - only on mobile */}
     {showSwipeHint && (
-      <div className="sm:hidden fixed top-16 left-1/2 transform -translate-x-1/2 z-40 animate-in fade-in slide-in-from-top-2 duration-300">
-        <div className="bg-surface/90 backdrop-blur-sm border border-border/50 rounded-full px-4 py-2 shadow-lg">
-          <p className="text-sm text-muted-foreground whitespace-nowrap">
+      <div className="sm:hidden fixed top-16 left-1/2 transform -translate-x-1/2 z-40 animate-in fade-in slide-in-from-top-2 duration-300 pt-1">
+        <div className="bg-surface/90 backdrop-blur-sm border border-border/50 rounded-full px-3 py-1 shadow-lg">
+          <p className="text-xs text-muted-foreground whitespace-nowrap">
             👆 Swipe to navigate between sections
           </p>
         </div>

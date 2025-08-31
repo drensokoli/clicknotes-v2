@@ -371,8 +371,8 @@ async function fetchTVShowWithDetails(tvShow: TVShow, tmdbApiKey: string, omdbAp
     }
 
     // Create Stremio link
-    const stremioLink = omdbData?.imdbId 
-      ? `https://www.strem.io/s/movie/${tvShow.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`
+    const stremioLink = omdbData?.imdbId
+      ? `https://www.strem.io/s/series/${tvShow.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`
       : null
 
     if (stremioLink) {
@@ -728,46 +728,81 @@ async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[]) {
       } : null
     });
     
-    // Store paginated movies in Redis (6 groups of 40 = 240 total)
-    console.log(`[POPULATE] Storing paginated movies in Redis (6 groups of 40 = 240 total)...`);
-    
-    // Create paginated keys: movies1, movies2, movies3, movies4, movies5, movies6
-    // Each group has exactly 40 items
-    const movies1 = finalMovies.slice(0, 40);
-    const movies2 = finalMovies.slice(40, 80);
-    const movies3 = finalMovies.slice(80, 120);
-    const movies4 = finalMovies.slice(120, 160);
-    const movies5 = finalMovies.slice(160, 200);
-    const movies6 = finalMovies.slice(200, 240);
-    
-    console.log(`[POPULATE] Paginated movies: movies1(${movies1.length}), movies2(${movies2.length}), movies3(${movies3.length}), movies4(${movies4.length}), movies5(${movies5.length}), movies6(${movies6.length})`);
-    
+    // Store individual movies in Redis and create popularity ranking
+    console.log(`[POPULATE] Storing individual movies in Redis (240 movies)...`);
+
     // Store in both Redis databases
     try {
       // Store in primary Redis
-      await client.set('movies1', JSON.stringify(movies1));
-      await client.set('movies2', JSON.stringify(movies2));
-      await client.set('movies3', JSON.stringify(movies3));
-      await client.set('movies4', JSON.stringify(movies4));
-      await client.set('movies5', JSON.stringify(movies5));
-      await client.set('movies6', JSON.stringify(movies6));
-      console.log(`[POPULATE] ✅ Stored paginated movies in primary Redis`);
-      
+      console.log(`[POPULATE] Storing individual movies in primary Redis...`);
+
+      // Store each movie individually
+      for (let i = 0; i < finalMovies.length; i++) {
+        const movie = finalMovies[i];
+        const movieKey = `movie:${movie.id}`;
+
+        // Validate that the movie object can be JSON-serialized
+        let serializedMovie;
+        try {
+          serializedMovie = JSON.stringify(movie);
+          console.log(`[POPULATE] ✅ Movie ${movie.title} successfully serialized to JSON (${serializedMovie.length} chars)`);
+        } catch (serializeError) {
+          console.error(`[POPULATE] ❌ Failed to serialize movie ${movie.title}:`, serializeError);
+          console.error(`[POPULATE] Movie object:`, movie);
+          continue; // Skip this movie
+        }
+
+        await client.set(movieKey, serializedMovie);
+        console.log(`[POPULATE] Stored movie: ${movieKey} (${movie.title})`);
+      }
+
+      // Create sorted set for movie popularity ranking
+      console.log(`[POPULATE] Creating movie popularity ranking sorted set...`);
+      const rankingKey = 'popular_ranking:movies';
+
+      // Add each movie to the sorted set with rank as score (1-based)
+      for (let i = 0; i < finalMovies.length; i++) {
+        const movie = finalMovies[i];
+        const rank = i + 1; // 1-based ranking
+        await client.zAdd(rankingKey, { score: rank, value: movie.id.toString() });
+      }
+
+      console.log(`[POPULATE] ✅ Stored ${finalMovies.length} individual movies and created popularity ranking in primary Redis`);
+
       // Store in backup Redis
       const backupClient = createRedisClient2();
       await backupClient.connect();
-      await backupClient.set('movies1', JSON.stringify(movies1));
-      await backupClient.set('movies2', JSON.stringify(movies2));
-      await backupClient.set('movies3', JSON.stringify(movies3));
-      await backupClient.set('movies4', JSON.stringify(movies4));
-      await backupClient.set('movies5', JSON.stringify(movies5));
-      await backupClient.set('movies6', JSON.stringify(movies6));
+
+      console.log(`[POPULATE] Storing individual movies in backup Redis...`);
+      for (let i = 0; i < finalMovies.length; i++) {
+        const movie = finalMovies[i];
+        const movieKey = `movie:${movie.id}`;
+
+        // Use the same serialized data from primary Redis
+        let serializedMovie;
+        try {
+          serializedMovie = JSON.stringify(movie);
+        } catch (serializeError) {
+          console.error(`[POPULATE] ❌ Failed to serialize movie for backup ${movie.title}:`, serializeError);
+          continue; // Skip this movie
+        }
+
+        await backupClient.set(movieKey, serializedMovie);
+      }
+
+      // Create sorted set in backup Redis
+      for (let i = 0; i < finalMovies.length; i++) {
+        const movie = finalMovies[i];
+        const rank = i + 1; // 1-based ranking
+        await backupClient.zAdd(rankingKey, { score: rank, value: movie.id.toString() });
+      }
+
       await backupClient.disconnect();
-      console.log(`[POPULATE] ✅ Stored paginated movies in backup Redis`);
-      
+      console.log(`[POPULATE] ✅ Stored ${finalMovies.length} individual movies and created popularity ranking in backup Redis`);
+
     } catch (error) {
-      console.error(`[POPULATE] Error storing paginated movies:`, error);
-      await sendErrorNotification('movies', error as Error, 'Storing paginated movies');
+      console.error(`[POPULATE] Error storing individual movies:`, error);
+      await sendErrorNotification('movies', error as Error, 'Storing individual movies');
     }
     
     return finalMovies;
@@ -927,46 +962,81 @@ async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[]) {
       } : null
     });
     
-    // Store paginated TV shows in Redis (6 groups of 40 = 240 total)
-    console.log(`[POPULATE] Storing paginated TV shows in Redis (6 groups of 40 = 240 total)...`);
-    
-    // Create paginated keys: tvshows1, tvshows2, tvshows3, tvshows4, tvshows5, tvshows6
-    // Each group has exactly 40 items
-    const tvshows1 = finalTVShows.slice(0, 40);
-    const tvshows2 = finalTVShows.slice(40, 80);
-    const tvshows3 = finalTVShows.slice(80, 120);
-    const tvshows4 = finalTVShows.slice(120, 160);
-    const tvshows5 = finalTVShows.slice(160, 200);
-    const tvshows6 = finalTVShows.slice(200, 240);
-    
-    console.log(`[POPULATE] Paginated TV shows: tvshows1(${tvshows1.length}), tvshows2(${tvshows2.length}), tvshows3(${tvshows3.length}), tvshows4(${tvshows4.length}), tvshows5(${tvshows5.length}), tvshows6(${tvshows6.length})`);
-    
+    // Store individual TV shows in Redis and create popularity ranking
+    console.log(`[POPULATE] Storing individual TV shows in Redis (240 TV shows)...`);
+
     // Store in both Redis databases
     try {
       // Store in primary Redis
-      await client.set('tvshows1', JSON.stringify(tvshows1));
-      await client.set('tvshows2', JSON.stringify(tvshows2));
-      await client.set('tvshows3', JSON.stringify(tvshows3));
-      await client.set('tvshows4', JSON.stringify(tvshows4));
-      await client.set('tvshows5', JSON.stringify(tvshows5));
-      await client.set('tvshows6', JSON.stringify(tvshows6));
-      console.log(`[POPULATE] ✅ Stored paginated TV shows in primary Redis`);
-      
+      console.log(`[POPULATE] Storing individual TV shows in primary Redis...`);
+
+      // Store each TV show individually
+      for (let i = 0; i < finalTVShows.length; i++) {
+        const tvShow = finalTVShows[i];
+        const tvShowKey = `tvshow:${tvShow.id}`;
+
+        // Validate that the TV show object can be JSON-serialized
+        let serializedTVShow;
+        try {
+          serializedTVShow = JSON.stringify(tvShow);
+          console.log(`[POPULATE] ✅ TV Show ${tvShow.name} successfully serialized to JSON (${serializedTVShow.length} chars)`);
+        } catch (serializeError) {
+          console.error(`[POPULATE] ❌ Failed to serialize TV show ${tvShow.name}:`, serializeError);
+          console.error(`[POPULATE] TV Show object:`, tvShow);
+          continue; // Skip this TV show
+        }
+
+        await client.set(tvShowKey, serializedTVShow);
+        console.log(`[POPULATE] Stored TV show: ${tvShowKey} (${tvShow.name})`);
+      }
+
+      // Create sorted set for TV show popularity ranking
+      console.log(`[POPULATE] Creating TV show popularity ranking sorted set...`);
+      const rankingKey = 'popular_ranking:tvshows';
+
+      // Add each TV show to the sorted set with rank as score (1-based)
+      for (let i = 0; i < finalTVShows.length; i++) {
+        const tvShow = finalTVShows[i];
+        const rank = i + 1; // 1-based ranking
+        await client.zAdd(rankingKey, { score: rank, value: tvShow.id.toString() });
+      }
+
+      console.log(`[POPULATE] ✅ Stored ${finalTVShows.length} individual TV shows and created popularity ranking in primary Redis`);
+
       // Store in backup Redis
       const backupClient = createRedisClient2();
       await backupClient.connect();
-      await backupClient.set('tvshows1', JSON.stringify(tvshows1));
-      await backupClient.set('tvshows2', JSON.stringify(tvshows2));
-      await backupClient.set('tvshows3', JSON.stringify(tvshows3));
-      await backupClient.set('tvshows4', JSON.stringify(tvshows4));
-      await backupClient.set('tvshows5', JSON.stringify(tvshows5));
-      await backupClient.set('tvshows6', JSON.stringify(tvshows6));
+
+      console.log(`[POPULATE] Storing individual TV shows in backup Redis...`);
+      for (let i = 0; i < finalTVShows.length; i++) {
+        const tvShow = finalTVShows[i];
+        const tvShowKey = `tvshow:${tvShow.id}`;
+
+        // Use the same serialized data from primary Redis
+        let serializedTVShow;
+        try {
+          serializedTVShow = JSON.stringify(tvShow);
+        } catch (serializeError) {
+          console.error(`[POPULATE] ❌ Failed to serialize TV show for backup ${tvShow.name}:`, serializeError);
+          continue; // Skip this TV show
+        }
+
+        await backupClient.set(tvShowKey, serializedTVShow);
+      }
+
+      // Create sorted set in backup Redis
+      for (let i = 0; i < finalTVShows.length; i++) {
+        const tvShow = finalTVShows[i];
+        const rank = i + 1; // 1-based ranking
+        await backupClient.zAdd(rankingKey, { score: rank, value: tvShow.id.toString() });
+      }
+
       await backupClient.disconnect();
-      console.log(`[POPULATE] ✅ Stored paginated TV shows in backup Redis`);
-      
+      console.log(`[POPULATE] ✅ Stored ${finalTVShows.length} individual TV shows and created popularity ranking in backup Redis`);
+
     } catch (error) {
-      console.error(`[POPULATE] Error storing paginated TV shows:`, error);
-      await sendErrorNotification('tvshows', error as Error, 'Storing paginated TV shows');
+      console.error(`[POPULATE] Error storing individual TV shows:`, error);
+      await sendErrorNotification('tvshows', error as Error, 'Storing individual TV shows');
     }
     
     return finalTVShows;
@@ -1169,48 +1239,92 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
       } : null
     });
     
-    // Store paginated books in Redis (4 groups of 40 = 160 total)
-    console.log(`[POPULATE] Storing paginated books in Redis (4 groups of 40 = 160 total)...`);
-    
-    // Create paginated keys: books1, books2, books3, books4
-    // Each group has exactly 40 items
-    const books1 = finalBooks.slice(0, 40);
-    const books2 = finalBooks.slice(40, 80);
-    const books3 = finalBooks.slice(80, 120);
-    const books4 = finalBooks.slice(120, 160);
-    
-    console.log(`[POPULATE] Created 4 book groups: books1(${books1.length}), books2(${books2.length}), books3(${books3.length}), books4(${books4.length})`);
-    
+    // Store individual books in Redis and create popularity ranking
+    console.log(`[POPULATE] Storing individual books in Redis (160 books)...`);
+
     // Store in both Redis databases
     try {
       // Store in primary Redis
-      await client.set('books1', JSON.stringify(books1));
-      await client.set('books2', JSON.stringify(books2));
-      await client.set('books3', JSON.stringify(books3));
-      await client.set('books4', JSON.stringify(books4));
-      console.log(`[POPULATE] ✅ Stored 4 paginated book groups in primary Redis`);
-      
+      console.log(`[POPULATE] Storing individual books in primary Redis...`);
+
+      // Store each book individually
+      for (let i = 0; i < finalBooks.length; i++) {
+        const book = finalBooks[i];
+        const bookKey = `book:${book.id}`;
+
+        // Validate that the book object can be JSON-serialized
+        let serializedBook;
+        try {
+          serializedBook = JSON.stringify(book);
+          console.log(`[POPULATE] ✅ Book ${book.volumeInfo?.title || 'Unknown Title'} successfully serialized to JSON (${serializedBook.length} chars)`);
+        } catch (serializeError) {
+          console.error(`[POPULATE] ❌ Failed to serialize book ${book.volumeInfo?.title || 'Unknown Title'}:`, serializeError);
+          console.error(`[POPULATE] Book object:`, book);
+          continue; // Skip this book
+        }
+
+        await client.set(bookKey, serializedBook);
+        console.log(`[POPULATE] Stored book: ${bookKey} (${book.volumeInfo?.title || 'Unknown Title'})`);
+      }
+
+      // Create sorted set for book popularity ranking
+      console.log(`[POPULATE] Creating book popularity ranking sorted set...`);
+      const rankingKey = 'popular_ranking:books';
+
+      // Add each book to the sorted set with rank as score (1-based)
+      for (let i = 0; i < finalBooks.length; i++) {
+        const book = finalBooks[i];
+        const rank = i + 1; // 1-based ranking
+        await client.zAdd(rankingKey, { score: rank, value: book.id.toString() });
+      }
+
+      console.log(`[POPULATE] ✅ Stored ${finalBooks.length} individual books and created popularity ranking in primary Redis`);
+
       // Store in backup Redis
       const backupClient = createRedisClient2();
       await backupClient.connect();
-      await backupClient.set('books1', JSON.stringify(books1));
-      await backupClient.set('books2', JSON.stringify(books2));
-      await backupClient.set('books3', JSON.stringify(books3));
-      await backupClient.set('books4', JSON.stringify(books4));
+
+      console.log(`[POPULATE] Storing individual books in backup Redis...`);
+      for (let i = 0; i < finalBooks.length; i++) {
+        const book = finalBooks[i];
+        const bookKey = `book:${book.id}`;
+
+        // Use the same serialized data from primary Redis
+        let serializedBook;
+        try {
+          serializedBook = JSON.stringify(book);
+        } catch (serializeError) {
+          console.error(`[POPULATE] ❌ Failed to serialize book for backup ${book.volumeInfo?.title || 'Unknown Title'}:`, serializeError);
+          continue; // Skip this book
+        }
+
+        await backupClient.set(bookKey, serializedBook);
+      }
+
+      // Create sorted set in backup Redis
+      for (let i = 0; i < finalBooks.length; i++) {
+        const book = finalBooks[i];
+        const rank = i + 1; // 1-based ranking
+        await backupClient.zAdd(rankingKey, { score: rank, value: book.id.toString() });
+      }
+
       await backupClient.disconnect();
-      console.log(`[POPULATE] ✅ Stored 4 paginated book groups in backup Redis`);
-      
+      console.log(`[POPULATE] ✅ Stored ${finalBooks.length} individual books and created popularity ranking in backup Redis`);
+
     } catch (error) {
-      console.error(`[POPULATE] Error storing paginated books:`, error);
-      await sendErrorNotification('books', error as Error, 'Storing paginated books');
+      console.error(`[POPULATE] Error storing individual books:`, error);
+      await sendErrorNotification('books', error as Error, 'Storing individual books');
     }
     
-    // Verify storage of first group
-    const storedBooks = await client.get('books1');
-    console.log(`[POPULATE] Redis verification (books1):`, {
-      hasStoredData: !!storedBooks,
-      dataLength: storedBooks ? JSON.parse(storedBooks).length : 0
-    });
+    // Verify storage by checking one of the individual book keys
+    if (finalBooks.length > 0) {
+      const firstBookKey = `book:${finalBooks[0].id}`;
+      const storedBook = await client.get(firstBookKey);
+      console.log(`[POPULATE] Redis verification (${firstBookKey}):`, {
+        hasStoredData: !!storedBook,
+        bookTitle: storedBook ? JSON.parse(storedBook).volumeInfo?.title : 'N/A'
+      });
+    }
     
     return finalBooks;
   } catch (error) {
@@ -1347,25 +1461,105 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ keys, message: 'Debug info' });
     }
 
-    if (type === 'movies1' || type === 'movies2' || type === 'movies3') {
+    // Handle individual media items
+    if (type?.startsWith('movie:')) {
       const data = await client.get(type)
+
+      // Validate JSON parsing
+      let parsedData = null;
+      if (data) {
+        try {
+          parsedData = JSON.parse(data);
+          console.log(`🎬 ✅ Movie ${type} successfully parsed from JSON (${data.length} chars)`);
+        } catch (parseError) {
+          console.error(`🎬 ❌ Failed to parse movie ${type} from JSON:`, parseError);
+          console.error(`🎬 Raw data:`, data.substring(0, 200) + '...');
+        }
+      }
+
       console.log(`${type} from Redis:`, {
         hasData: !!data,
         dataType: typeof data,
-        length: data ? JSON.parse(data).length : 0
+        movieTitle: parsedData ? parsedData.title : 'N/A'
       });
       await client.disconnect()
-      return NextResponse.json(data ? JSON.parse(data) : null)
-    } else if (type === 'tvshows1' || type === 'tvshows2' || type === 'tvshows3') {
+      return NextResponse.json(parsedData)
+    } else if (type?.startsWith('tvshow:')) {
       const data = await client.get(type)
+
+      // Validate JSON parsing
+      let parsedData = null;
+      if (data) {
+        try {
+          parsedData = JSON.parse(data);
+          console.log(`📺 ✅ TV Show ${type} successfully parsed from JSON (${data.length} chars)`);
+        } catch (parseError) {
+          console.error(`📺 ❌ Failed to parse TV show ${type} from JSON:`, parseError);
+          console.error(`📺 Raw data:`, data.substring(0, 200) + '...');
+        }
+      }
+
       console.log(`${type} from Redis:`, {
         hasData: !!data,
         dataType: typeof data,
-        length: data ? JSON.parse(data).length : 0
+        tvShowName: parsedData ? parsedData.name : 'N/A'
       });
       await client.disconnect()
-      return NextResponse.json(data ? JSON.parse(data) : null)
-    } else if (type && type.startsWith('books')) {
+      return NextResponse.json(parsedData)
+    } else if (type?.startsWith('book:')) {
+      const data = await client.get(type)
+
+      // Validate JSON parsing
+      let parsedData = null;
+      if (data) {
+        try {
+          parsedData = JSON.parse(data);
+          console.log(`📚 ✅ Book ${type} successfully parsed from JSON (${data.length} chars)`);
+        } catch (parseError) {
+          console.error(`📚 ❌ Failed to parse book ${type} from JSON:`, parseError);
+          console.error(`📚 Raw data:`, data.substring(0, 200) + '...');
+        }
+      }
+
+      console.log(`${type} from Redis:`, {
+        hasData: !!data,
+        dataType: typeof data,
+        bookTitle: parsedData ? parsedData.volumeInfo?.title : 'N/A'
+      });
+      await client.disconnect()
+      return NextResponse.json(parsedData)
+    }
+    // Handle popularity rankings
+    else if (type === 'popular_ranking:movies') {
+      const ranking = await client.zRangeWithScores(type, 0, -1)
+      console.log(`${type} from Redis:`, {
+        hasData: !!ranking,
+        count: ranking.length,
+        sample: ranking.slice(0, 3).map((item) => ({ id: item.value, rank: item.score }))
+      });
+      await client.disconnect()
+      return NextResponse.json(ranking || [])
+    } else if (type === 'popular_ranking:tvshows') {
+      const ranking = await client.zRangeWithScores(type, 0, -1)
+      console.log(`${type} from Redis:`, {
+        hasData: !!ranking,
+        count: ranking.length,
+        sample: ranking.slice(0, 3).map((item) => ({ id: item.value, rank: item.score }))
+      });
+      await client.disconnect()
+      return NextResponse.json(ranking || [])
+    } else if (type === 'popular_ranking:books') {
+      const ranking = await client.zRangeWithScores(type, 0, -1)
+      console.log(`${type} from Redis:`, {
+        hasData: !!ranking,
+        count: ranking.length,
+        sample: ranking.slice(0, 3).map((item) => ({ id: item.value, rank: item.score }))
+      });
+      await client.disconnect()
+      return NextResponse.json(ranking || [])
+    }
+    // Handle backward compatibility for old paginated keys
+    else if (type && (type.startsWith('movies') || type.startsWith('tvshows') || type.startsWith('books'))) {
       const data = await client.get(type)
       console.log(`${type} from Redis:`, {
         hasData: !!data,
@@ -1375,26 +1569,26 @@ export async function GET(request: NextRequest) {
       await client.disconnect()
       return NextResponse.json(data ? JSON.parse(data) : null)
     } else {
-      // Return all data
-      console.log('Fetching all data from Redis...');
-      const [movies, tvShows, books] = await Promise.all([
-        client.get('movies'),
-        client.get('tvshows'),
-        client.get('books')
+      // Return ranking data for all media types
+      console.log('Fetching all ranking data from Redis...');
+      const [movieRanking, tvShowRanking, bookRanking] = await Promise.all([
+        client.zRangeWithScores('popular_ranking:movies', 0, -1),
+        client.zRangeWithScores('popular_ranking:tvshows', 0, -1),
+        client.zRangeWithScores('popular_ranking:books', 0, -1)
       ])
-      
-      console.log('All Redis data:', {
-        movies: movies ? JSON.parse(movies).length : 0,
-        tvShows: tvShows ? JSON.parse(tvShows).length : 0,
-        books: books ? JSON.parse(books).length : 0
+
+      console.log('All Redis ranking data:', {
+        movieRanking: movieRanking.length,
+        tvShowRanking: tvShowRanking.length,
+        bookRanking: bookRanking.length
       });
-      
+
       await client.disconnect()
-      
+
       return NextResponse.json({
-        movies: movies ? JSON.parse(movies) : null,
-        tvshows: tvShows ? JSON.parse(tvShows) : null,
-        books: books ? JSON.parse(books) : null
+        movieRanking,
+        tvShowRanking,
+        bookRanking
       })
     }
   } catch (error) {

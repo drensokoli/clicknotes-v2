@@ -488,7 +488,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                 {/* Watch on Stremio - Only for movies/TV with IMDB ID */}
                 {(item.type === 'movie' || item.type === 'tvshow') && omdbData?.imdbId && (
                   <motion.a
-                    href={`https://www.strem.io/s/movie/${getTitle().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`}
+                    href={`https://www.strem.io/s/${item.type === 'movie' ? 'movie' : 'series'}/${getTitle().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-[#7B5BF5] hover:bg-[#6344e2] text-white rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"

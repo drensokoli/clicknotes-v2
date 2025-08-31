@@ -12,6 +12,9 @@ interface MainContentProps {
   initialMovies: Movie[]
   initialTVShows: TVShow[]
   initialBooks: Book[]
+  movieRanking?: Array<{value: string, score: number}>
+  tvShowRanking?: Array<{value: string, score: number}>
+  bookRanking?: Array<{value: string, score: number}>
   tmdbApiKey: string
   googleBooksApiKey: string
   redisKeysFetched: {
@@ -26,6 +29,9 @@ export function MainContent({
   initialMovies,
   initialTVShows,
   initialBooks,
+  movieRanking = [],
+  tvShowRanking = [],
+  bookRanking = [],
   tmdbApiKey,
   googleBooksApiKey,
   redisKeysFetched,
@@ -69,6 +75,9 @@ export function MainContent({
           initialMovies={initialMovies}
           initialTVShows={initialTVShows}
           initialBooks={initialBooks}
+          movieRanking={movieRanking}
+          tvShowRanking={tvShowRanking}
+          bookRanking={bookRanking}
           tmdbApiKey={tmdbApiKey}
           googleBooksApiKey={googleBooksApiKey}
           redisKeysFetched={redisKeysFetched}

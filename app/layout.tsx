@@ -13,6 +13,19 @@ export const metadata: Metadata = {
   title: "ClickNotes v2",
   description: "Save and organize your favorite movies, TV shows, and books",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      // { url: "/favicon.ico", sizes: "any" },
+      { url: "/icons/icon-192x192.png", type: "image/png", sizes: "192x192" },
+      { url: "/icons/icon-256x256.png", type: "image/png", sizes: "256x256" },
+      { url: "/icons/icon-512x512.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [
+      { url: "/icons/icon-192x192.png", type: "image/png", sizes: "192x192" },
+      { url: "/icons/icon-256x256.png", type: "image/png", sizes: "256x256" },
+    ],
+    // shortcut: "/favicon.ico",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

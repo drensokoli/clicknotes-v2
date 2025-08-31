@@ -12,6 +12,9 @@ interface ContentSectionProps {
   initialMovies: Movie[]
   initialTVShows: TVShow[]
   initialBooks: Book[]
+  movieRanking?: Array<{value: string, score: number}>
+  tvShowRanking?: Array<{value: string, score: number}>
+  bookRanking?: Array<{value: string, score: number}>
   tmdbApiKey: string
   googleBooksApiKey: string
   // Progressive loading props
@@ -31,6 +34,9 @@ export function ContentSection({
   initialMovies,
   initialTVShows,
   initialBooks,
+  movieRanking = [],
+  tvShowRanking = [],
+  bookRanking = [],
   tmdbApiKey,
   googleBooksApiKey,
   redisKeysFetched = { movies: 1, tvshows: 1, books: 1 },
@@ -45,6 +51,18 @@ export function ContentSection({
   useEffect(() => {
     setTmdbApiKey(tmdbApiKey)
   }, [tmdbApiKey, setTmdbApiKey])
+
+  // Log rankings data for debugging
+  useEffect(() => {
+    console.log('📊 ContentSection rankings received:', {
+      movieRanking: movieRanking.length,
+      tvShowRanking: tvShowRanking.length,
+      bookRanking: bookRanking.length,
+      movieRankingSample: movieRanking.slice(0, 3).map(r => ({ id: r.value, rank: r.score })),
+      tvShowRankingSample: tvShowRanking.slice(0, 3).map(r => ({ id: r.value, rank: r.score })),
+      bookRankingSample: bookRanking.slice(0, 3).map(r => ({ id: r.value, rank: r.score }))
+    });
+  }, [movieRanking, tvShowRanking, bookRanking]);
   
   // Use external state if provided, otherwise use internal state
   const [internalActiveSection, setInternalActiveSection] = useState<Section>("movies")
@@ -89,130 +107,262 @@ export function ContentSection({
     tvshows: 20,
     books: 20
   })
+
+  // Note: We start with 40 items in cache but only display 20 initially
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingNextPage, setIsLoadingNextPage] = useState(false)
+  const [isPrefetching, setIsPrefetching] = useState<{[key in Section]: boolean}>({
+    movies: false,
+    tvshows: false,
+    books: false
+  })
   const debounceTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
   
-  // Progressive loading state
-  const [currentRedisKeys, setCurrentRedisKeys] = useState(redisKeysFetched)
+  // Progressive loading state - now tracks ranking position instead of Redis keys
+  const [currentRankingPosition, setCurrentRankingPosition] = useState(redisKeysFetched)
   const [allMediaData, setAllMediaData] = useState({
     movies: initialMovies,
     tvshows: initialTVShows,
     books: initialBooks
   })
   
-  // Function to fetch next Redis key for progressive loading
-  const fetchNextRedisKey = useCallback(async (mediaType: Section) => {
-    if (isLoadingNextPage || searchQuery) {
+  // Function to prefetch next batch in background (no loading states)
+  const prefetchNextBatch = useCallback(async (mediaType: Section) => {
+    if (isLoadingNextPage || searchQuery || isPrefetching[mediaType]) {
       return;
     }
-    
-    const nextKeyNumber = currentRedisKeys[mediaType] + 1;
-    
-    setIsLoadingNextPage(true);
-    
+
+    const currentDataCount = allMediaData[mediaType].length;
+    const startIndex = currentDataCount;
+    const endIndex = startIndex + 9; // Prefetch next 10 items
+
+    console.log(`🔄 Background prefetch: ${mediaType} IDs from ranking range: ${startIndex}-${endIndex}`);
+
+    // Set prefetching flag
+    setIsPrefetching(prev => ({ ...prev, [mediaType]: true }));
+
     try {
-      const response = await fetch(`/api/redisHandler?type=${mediaType}${nextKeyNumber}`);
-      
-      if (response.ok) {
-        const newData = await response.json();
-        
-        if (Array.isArray(newData) && newData.length > 0) {
-          // Update all states in the correct order
-          setAllMediaData(prev => {
-            const updatedData = {
-              ...prev,
-              [mediaType]: [...prev[mediaType], ...newData]
-            };
-            return updatedData;
-          });
-          
-          setCurrentRedisKeys(prev => {
-            const updatedKeys = {
-              ...prev,
-              [mediaType]: nextKeyNumber
-            };
-            return updatedKeys;
-          });
-          
-          // Update display count to show the new items
-          setDisplayCounts(prev => {
-            const newCount = prev[mediaType] + 20;
-            return {
-              ...prev,
-              [mediaType]: newCount
-            };
-          });
-          
-        } else {
-          // If no data returned, we've reached the end of available Redis keys
-          // Mark this as the last key to prevent further fetching attempts
-          setCurrentRedisKeys(prev => {
-            const updatedKeys = {
-              ...prev,
-              [mediaType]: nextKeyNumber // Mark this as the last key fetched
-            };
-            return updatedKeys;
-          });
-        }
-      } else if (response.status === 404) {
-        // Key doesn't exist, we've reached the end
-        setCurrentRedisKeys(prev => {
-          const updatedKeys = {
-            ...prev,
-            [mediaType]: nextKeyNumber // Mark this as the last key fetched
-          };
-          return updatedKeys;
-        });
+      // Step 1: Get the next batch of IDs from the ranking
+      const rankingResponse = await fetch(`/api/redisHandler?type=ranking-range&mediaType=${mediaType}&start=${startIndex}&end=${endIndex}`);
+
+      if (!rankingResponse.ok) {
+        console.error(`❌ Prefetch failed to fetch ranking range for ${mediaType}`);
+        return;
+      }
+
+      const rankingData = await rankingResponse.json();
+
+      if (!rankingData.success || !rankingData.ids || rankingData.ids.length === 0) {
+        console.log(`✅ No more ${mediaType} items available for prefetch`);
+        setCurrentRankingPosition(prev => ({
+          ...prev,
+          [mediaType]: 999
+        }));
+        return;
+      }
+
+      const ids = rankingData.ids;
+
+      // Step 2: Fetch the actual items by IDs
+      const idsString = ids.join(',');
+      const singularMediaType = mediaType === 'movies' ? 'movie' :
+                               mediaType === 'tvshows' ? 'tvshow' :
+                               mediaType === 'books' ? 'book' : mediaType;
+
+      const itemsResponse = await fetch(`/api/redisHandler?type=fetch-by-ids&mediaType=${singularMediaType}&ids=${idsString}`);
+
+      if (!itemsResponse.ok) {
+        console.error(`❌ Prefetch failed to fetch ${mediaType} items by IDs`);
+        return;
+      }
+
+      const itemsData = await itemsResponse.json();
+
+      if (itemsData.success && itemsData.items && itemsData.items.length > 0) {
+        const newItems = itemsData.items;
+        console.log(`✅ Prefetch successful: ${newItems.length} new ${mediaType} items loaded in background`);
+
+        // Update data state (but don't update display count)
+        setAllMediaData(prev => ({
+          ...prev,
+          [mediaType]: [...prev[mediaType], ...newItems]
+        }));
+
+        // Update the ranking position counter
+        setCurrentRankingPosition(prev => ({
+          ...prev,
+          [mediaType]: endIndex + 1
+        }));
+
+      } else {
+        console.log(`⚠️ Prefetch: No ${mediaType} items found for requested IDs`);
+        setCurrentRankingPosition(prev => ({
+          ...prev,
+          [mediaType]: 999
+        }));
       }
     } catch (error) {
-      console.error(`❌ Error fetching ${mediaType}${nextKeyNumber}:`, error);
-      // On error, also mark as end to prevent infinite retries
-      setCurrentRedisKeys(prev => {
-        const updatedKeys = {
+      console.error(`❌ Error in prefetch for ${mediaType}:`, error);
+      setCurrentRankingPosition(prev => ({
+        ...prev,
+        [mediaType]: 999
+      }));
+    } finally {
+      // Reset prefetching flag
+      setIsPrefetching(prev => ({ ...prev, [mediaType]: false }));
+    }
+  }, [isLoadingNextPage, searchQuery, allMediaData, currentRankingPosition, displayCounts, isPrefetching]);
+
+  // Function to fetch next batch using ranking system (with loading states)
+  const fetchNextBatch = useCallback(async (mediaType: Section) => {
+    if (isLoadingNextPage || searchQuery || isPrefetching[mediaType]) {
+      return;
+    }
+
+    const currentDataCount = allMediaData[mediaType].length;
+    const startIndex = currentDataCount;
+    const endIndex = startIndex + 9; // Fetch next 10 items (0-indexed, so 9 is the 10th item)
+
+    setIsLoadingNextPage(true);
+
+    try {
+      // Step 1: Get the next batch of IDs from the ranking
+      console.log(`📊 Fetching ${mediaType} IDs from ranking range: ${startIndex}-${endIndex}`);
+      const rankingResponse = await fetch(`/api/redisHandler?type=ranking-range&mediaType=${mediaType}&start=${startIndex}&end=${endIndex}`);
+
+      if (!rankingResponse.ok) {
+        console.error(`❌ Failed to fetch ranking range for ${mediaType}`);
+        return;
+      }
+
+      const rankingData = await rankingResponse.json();
+
+      if (!rankingData.success || !rankingData.ids || rankingData.ids.length === 0) {
+        console.log(`✅ No more ${mediaType} items available in ranking (fetched ${currentDataCount} total)`);
+        // Mark as end by setting a high number
+        setCurrentRankingPosition(prev => ({
           ...prev,
-          [mediaType]: nextKeyNumber
-        };
-        return updatedKeys;
-      });
+          [mediaType]: 999 // High number to indicate end reached
+        }));
+        return;
+      }
+
+      const ids = rankingData.ids;
+      console.log(`📊 Got ${ids.length} ${mediaType} IDs from ranking`);
+
+      // Step 2: Fetch the actual items by IDs
+      const idsString = ids.join(',');
+      // Convert plural to singular for Redis key format
+      const singularMediaType = mediaType === 'movies' ? 'movie' :
+                               mediaType === 'tvshows' ? 'tvshow' :
+                               mediaType === 'books' ? 'book' : mediaType;
+      console.log(`🎬 Fetching ${ids.length} ${mediaType} items by IDs`);
+      const itemsResponse = await fetch(`/api/redisHandler?type=fetch-by-ids&mediaType=${singularMediaType}&ids=${idsString}`);
+
+      if (!itemsResponse.ok) {
+        console.error(`❌ Failed to fetch ${mediaType} items by IDs`);
+        return;
+      }
+
+      const itemsData = await itemsResponse.json();
+
+      if (itemsData.success && itemsData.items && itemsData.items.length > 0) {
+        const newItems = itemsData.items;
+        console.log(`✅ Successfully fetched ${newItems.length} new ${mediaType} items`);
+
+        // Update all states in the correct order
+        setAllMediaData(prev => {
+          const updatedData = {
+            ...prev,
+            [mediaType]: [...prev[mediaType], ...newItems]
+          };
+          return updatedData;
+        });
+
+        // Update the ranking position counter
+        setCurrentRankingPosition(prev => {
+          const updatedPosition = {
+            ...prev,
+            [mediaType]: endIndex + 1 // Next start position
+          };
+          return updatedPosition;
+        });
+
+        // Update display count to show the new items
+        setDisplayCounts(prev => {
+          const newCount = prev[mediaType] + 10;
+          return {
+            ...prev,
+            [mediaType]: newCount
+          };
+        });
+
+      } else {
+        console.log(`⚠️ No ${mediaType} items found for the requested IDs`);
+        // Mark as end
+        setCurrentRankingPosition(prev => ({
+          ...prev,
+          [mediaType]: 999
+        }));
+      }
+    } catch (error) {
+      console.error(`❌ Error fetching next ${mediaType} batch:`, error);
+      // On error, mark as end to prevent infinite retries
+      setCurrentRankingPosition(prev => ({
+        ...prev,
+        [mediaType]: 999
+      }));
     } finally {
       setIsLoadingNextPage(false);
     }
-  }, [isLoadingNextPage, searchQuery, currentRedisKeys]);
+  }, [isLoadingNextPage, searchQuery, allMediaData, currentRankingPosition, displayCounts, isPrefetching]);
 
-  // Handle infinite scroll with progressive loading
+  // Handle infinite scroll with progressive loading and prefetching
   const loadMore = useCallback(async () => {
-    if (isLoading || isLoadingNextPage || searchQuery) {
+    if (isLoading || isLoadingNextPage || searchQuery || isPrefetching[activeSection]) {
       return;
     }
-    
+
     const currentData = allMediaData[activeSection];
     const currentDisplayCount = displayCounts[activeSection];
-    
-    // Check if we need to fetch the next Redis key
-    if (currentDisplayCount >= currentData.length) {
-      // Check if we've already fetched all available Redis keys
-      const maxRedisKeys = activeSection === 'books' ? 4 : 6; // Books have 4 keys, movies/TV shows have 6
-      if (currentRedisKeys[activeSection] >= maxRedisKeys) {
+    const loadedCount = currentData.length;
+
+    // Check if we need to fetch the next batch from ranking (when we've displayed all loaded items)
+    if (currentDisplayCount >= loadedCount) {
+      // Check if we've reached the end of the ranking (marked by high number)
+      if (currentRankingPosition[activeSection] >= 999) {
+        console.log(`✅ Reached end of ${activeSection} ranking`);
         return;
       }
-      
-      fetchNextRedisKey(activeSection);
+
+      fetchNextBatch(activeSection);
       return;
     }
-    
-    // Load 20 more items from current data
+
+    // Load 10 more items from current data
     setIsLoading(true);
-    
+
     setTimeout(() => {
+      const newDisplayCount = currentDisplayCount + 10;
       setDisplayCounts(prev => ({
         ...prev,
-        [activeSection]: prev[activeSection] + 20
+        [activeSection]: newDisplayCount
       }));
       setIsLoading(false);
-    }, 300);
-  }, [isLoading, isLoadingNextPage, searchQuery, activeSection, allMediaData, displayCounts, currentRedisKeys, fetchNextRedisKey]);
+
+      // Trigger prefetch when we're about to show the last portion of current cache
+      // For the initial 40 items: prefetch when showing 21-30 items (so 41-50 is ready when we reach 31-40)
+      // For subsequent batches: prefetch when we're 10 items from the end of loaded data
+      const prefetchThreshold = loadedCount <= 40 ? 30 : loadedCount - 10;
+      const shouldPrefetch = newDisplayCount >= prefetchThreshold && currentRankingPosition[activeSection] < 999;
+
+      if (shouldPrefetch) {
+        console.log(`🔄 Prefetch triggered: displaying ${newDisplayCount}/${loadedCount} items, prefetching next 10 items`);
+        prefetchNextBatch(activeSection);
+      }
+    }, 0);
+  }, [isLoading, isLoadingNextPage, searchQuery, activeSection, allMediaData, displayCounts, currentRankingPosition, fetchNextBatch, prefetchNextBatch, isPrefetching]);
 
   // Set up intersection observer for infinite scroll
   useEffect(() => {
@@ -239,7 +389,7 @@ export function ContentSection({
       if (loadMoreRef.current) {
         observer.observe(loadMoreRef.current);
       }
-    }, 100);
+    }, 0);
 
     return () => {
       clearTimeout(timer);
@@ -273,6 +423,14 @@ export function ContentSection({
       setIsInitialized(true)
     }
   }, [externalActiveSection])
+
+  // Scroll to top when switching sections
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'instant'
+    })
+  }, [activeSection])
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -625,7 +783,7 @@ export function ContentSection({
       )}
 
       {/* Progressive Loading Indicator */}
-      {isLoadingNextPage && (
+      {isLoading && (
         <div className="flex items-center justify-center py-8">
           <div className="flex items-center gap-3 text-muted-foreground">
             <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -638,15 +796,14 @@ export function ContentSection({
       {!searchQuery && (() => {
         const totalItems = allMediaData[activeSection].length;
         const currentDisplayCount = displayCounts[activeSection];
-        const maxRedisKeys = activeSection === 'books' ? 4 : 6;
-        const hasReachedMaxKeys = currentRedisKeys[activeSection] >= maxRedisKeys;
-        
-        // Show trigger if we haven't displayed all current items or haven't reached max Redis keys
-        const shouldShowTrigger = currentDisplayCount < totalItems || 
-                                (currentDisplayCount >= totalItems && !hasReachedMaxKeys);
-        
+        const hasReachedEndOfRanking = currentRankingPosition[activeSection] >= 999;
+
+        // Show trigger if we haven't displayed all current items or haven't reached end of ranking
+        const shouldShowTrigger = currentDisplayCount < totalItems ||
+                                (currentDisplayCount >= totalItems && !hasReachedEndOfRanking);
+
         return shouldShowTrigger && (
-          <div 
+          <div
             ref={loadMoreRef}
             className="h-10 w-full mt-8"
             aria-hidden="true"

@@ -129,7 +129,7 @@ async function fetchTVShowWithDetails(tvShow: TVShow, tmdbApiKey: string, omdbAp
 
     // Create Stremio link
     const stremioLink = omdbData?.imdbId 
-      ? `https://www.strem.io/s/movie/${tvShow.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`
+      ? `https://www.strem.io/s/series/${tvShow.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`
       : null
 
     return {
@@ -180,8 +180,11 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
+    const page = searchParams.get('page')
+    const limit = searchParams.get('limit')
     
-    console.log('📋 Requested type:', type);
+    // Silent - remove request details logging
+    // console.log('📋 Requested type:', type, 'page:', page, 'limit:', limit);
 
     // Add a special case to list all keys for debugging
     if (type === 'debug') {
@@ -191,8 +194,262 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ keys, message: 'Debug info' });
     }
 
+    // Debug popular rankings
+    if (type === 'debug-rankings') {
+      const [movieRanking, tvShowRanking, bookRanking] = await Promise.all([
+        client.zRangeWithScores('popular_ranking:movies', 0, 4),
+        client.zRangeWithScores('popular_ranking:tvshows', 0, 4),
+        client.zRangeWithScores('popular_ranking:books', 0, 4)
+      ]);
+
+      console.log('🔍 Popular rankings debug:', {
+        movieRanking: movieRanking.length,
+        tvShowRanking: tvShowRanking.length,
+        bookRanking: bookRanking.length
+      });
+
+      await client.disconnect();
+      return NextResponse.json({
+        movieRanking,
+        tvShowRanking,
+        bookRanking
+      });
+    }
+
+
+
+    // Simple test to verify data is working
+    if (type === 'test-data') {
+      try {
+        console.log('🧪 Testing data retrieval...');
+
+        // Test movie ranking
+        const movieRanking = await client.zRangeWithScores('popular_ranking:movies', 0, 2);
+        // Silent - remove sample logging
+        // console.log('🧪 Movie ranking sample:', movieRanking);
+
+        if (movieRanking.length > 0) {
+          const firstMovieId = movieRanking[0].value;
+          const movieKey = `movie:${firstMovieId}`;
+          const movieData = await client.get(movieKey);
+
+          console.log('🧪 First movie key:', movieKey);
+          console.log('🧪 Movie data exists:', movieData !== null);
+          console.log('🧪 Movie data length:', movieData ? movieData.length : 0);
+
+          if (movieData) {
+            try {
+              const parsed = JSON.parse(movieData);
+              console.log('🧪 Parsed movie:', { id: parsed.id, title: parsed.title });
+              return NextResponse.json({
+                success: true,
+                movieRanking: movieRanking.length,
+                firstMovie: { id: parsed.id, title: parsed.title }
+              });
+            } catch (parseError) {
+              console.error('🧪 Parse error:', parseError);
+              return NextResponse.json({ success: false, error: 'Parse error' });
+            }
+          } else {
+            return NextResponse.json({ success: false, error: 'No movie data' });
+          }
+        } else {
+          return NextResponse.json({ success: false, error: 'No movie ranking' });
+        }
+      } catch (error) {
+        console.error('🧪 Test failed:', error);
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) });
+      } finally {
+        await client.disconnect();
+      }
+    }
+
+    // Save cache to Redis
+    if (type === 'save-cache') {
+      try {
+        const { key, data, duration } = await request.json();
+
+        console.log(`💾 Saving cache to Redis key: ${key}`);
+
+        // Store the cache data
+        await client.set(key, JSON.stringify(data));
+
+        // Set expiration if duration is provided
+        if (duration) {
+          await client.expire(key, Math.floor(duration / 1000)); // Convert ms to seconds
+        }
+
+        console.log(`✅ Cache saved successfully with key: ${key}`);
+        await client.disconnect();
+
+        return NextResponse.json({ success: true, message: 'Cache saved' });
+      } catch (error) {
+        console.error('❌ Error saving cache:', error);
+        await client.disconnect();
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+      }
+    }
+
+    // Load cache from Redis (deprecated - now using in-memory caching)
+    if (type === 'load-cache') {
+      console.log('⚠️ Cache load request received - now using in-memory caching');
+      return NextResponse.json(null);
+    }
+
+    // Test individual movie key
+    if (type === 'test-movie') {
+      const testId = '911430'; // First movie ID from the ranking
+      const testKey = `movie:${testId}`;
+      const movieData = await client.get(testKey);
+
+      console.log(`🔍 Test movie key ${testKey}:`, {
+        exists: movieData !== null,
+        dataLength: movieData ? movieData.length : 0,
+        dataPreview: movieData ? movieData.substring(0, 200) + '...' : 'null'
+      });
+
+      try {
+        const parsed = movieData ? JSON.parse(movieData) : null;
+        console.log(`🔍 Parsed movie data:`, parsed ? 'Movie data parsed successfully' : 'null');
+      } catch (parseError) {
+        console.error(`❌ Failed to parse test movie:`, parseError);
+      }
+
+      await client.disconnect();
+      return NextResponse.json({
+        key: testKey,
+        exists: movieData !== null,
+        data: movieData ? JSON.parse(movieData) : null
+      });
+    }
+
+    // Handle fetching entire popular rankings
+    if (type === 'popular-rankings') {
+      try {
+        console.log('📊 Fetching entire popular rankings...');
+
+        const [movieRanking, tvShowRanking, bookRanking] = await Promise.all([
+          client.zRangeWithScores('popular_ranking:movies', 0, -1), // Get all movie rankings
+          client.zRangeWithScores('popular_ranking:tvshows', 0, -1), // Get all TV show rankings
+          client.zRangeWithScores('popular_ranking:books', 0, -1) // Get all book rankings
+        ]);
+
+        // Silent - remove rankings fetch logging
+        // console.log('📊 Popular rankings fetched:', {
+        //   movieRanking: movieRanking.length,
+        //   tvShowRanking: tvShowRanking.length,
+        //   bookRanking: bookRanking.length
+        // });
+
+        await client.disconnect();
+
+        return NextResponse.json({
+          movieRanking,
+          tvShowRanking,
+          bookRanking
+        });
+      } catch (error) {
+        console.error('❌ Error fetching popular rankings:', error);
+        await client.disconnect();
+        return NextResponse.json(null);
+      }
+    }
+
+    // Handle fetching specific range of rankings
+    if (type === 'ranking-range') {
+      try {
+        const mediaType = searchParams.get('mediaType');
+        const startStr = searchParams.get('start');
+        const endStr = searchParams.get('end');
+
+        if (!mediaType || !startStr || !endStr) {
+          await client.disconnect();
+          return NextResponse.json({ success: false, error: 'Missing required parameters: mediaType, start, end' }, { status: 400 });
+        }
+
+        const start = parseInt(startStr);
+        const end = parseInt(endStr);
+
+        if (isNaN(start) || isNaN(end)) {
+          await client.disconnect();
+          return NextResponse.json({ success: false, error: 'Invalid start or end values' }, { status: 400 });
+        }
+
+        console.log(`📊 Fetching ${mediaType} ranking range: ${start}-${end}`);
+
+        const rankingKey = `popular_ranking:${mediaType}`;
+        const rankingRange = await client.zRange(rankingKey, start, end);
+
+        if (rankingRange.length === 0) {
+          await client.disconnect();
+          return NextResponse.json({ success: true, ids: [], message: 'No more items in ranking' });
+        }
+
+        console.log(`📊 Found ${rankingRange.length} ${mediaType} IDs in range ${start}-${end}`);
+        await client.disconnect();
+
+        return NextResponse.json({ success: true, ids: rankingRange });
+      } catch (error) {
+        console.error('❌ Error fetching ranking range:', error);
+        await client.disconnect();
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+      }
+    }
+
+    // Handle fetching multiple items by IDs
+    if (type === 'fetch-by-ids') {
+      try {
+        const mediaType = searchParams.get('mediaType');
+        const idsParam = searchParams.get('ids');
+
+        if (!mediaType || !idsParam) {
+          await client.disconnect();
+          return NextResponse.json({ success: false, error: 'Missing required parameters: mediaType, ids' }, { status: 400 });
+        }
+
+        const ids = idsParam.split(',');
+        console.log(`🎬 Fetching ${ids.length} ${mediaType} items by IDs:`, ids.slice(0, 5), ids.length > 5 ? '...' : '');
+
+        const validItems = [];
+
+        for (const id of ids) {
+          try {
+            const itemKey = `${mediaType}:${id}`;
+            const itemData = await client.get(itemKey);
+
+            if (itemData) {
+              const parsed = JSON.parse(itemData);
+              validItems.push(parsed);
+            } else {
+              // Use singular form for Redis key display (what was actually searched)
+              const displayMediaType = mediaType === 'movie' ? 'movie' :
+                                     mediaType === 'tvshow' ? 'tvshow' :
+                                     mediaType === 'book' ? 'book' : mediaType;
+              console.log(`⚠️ ${displayMediaType}:${id} not found in Redis`);
+            }
+          } catch (error) {
+            // Use singular form for error display (what was actually searched)
+            const displayMediaType = mediaType === 'movie' ? 'movie' :
+                                   mediaType === 'tvshow' ? 'tvshow' :
+                                   mediaType === 'book' ? 'book' : mediaType;
+            console.error(`❌ Error fetching ${displayMediaType}:${id}:`, error);
+          }
+        }
+
+        console.log(`✅ Successfully fetched ${validItems.length}/${ids.length} ${mediaType} items`);
+        await client.disconnect();
+
+        return NextResponse.json({ success: true, items: validItems });
+      } catch (error) {
+        console.error('❌ Error fetching items by IDs:', error);
+        await client.disconnect();
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+      }
+    }
+
+    // Handle backward compatibility for old endpoints
     if (type === 'movies') {
-      // Get paginated movies from Redis (4 groups of 60)
+      // Get paginated movies from Redis (4 groups of 60) - backward compatibility
       const movies1 = await client.get('movies1');
       console.log('🎬 Movies from Redis (paginated):', {
         hasData: !!movies1,
@@ -202,7 +459,7 @@ export async function GET(request: NextRequest) {
       await client.disconnect();
       return NextResponse.json(movies1 ? JSON.parse(movies1) : null);
     } else if (type === 'tvshows') {
-      // Get paginated TV shows from Redis (4 groups of 60)
+      // Get paginated TV shows from Redis (4 groups of 60) - backward compatibility
       const tvshows1 = await client.get('tvshows1');
       console.log('📺 TV Shows from Redis (paginated):', {
         hasData: !!tvshows1,
@@ -212,7 +469,7 @@ export async function GET(request: NextRequest) {
       await client.disconnect();
       return NextResponse.json(tvshows1 ? JSON.parse(tvshows1) : null);
     } else if (type === 'books') {
-      // Get paginated books from Redis (groups of 60, last group may have fewer)
+      // Get paginated books from Redis (groups of 60, last group may have fewer) - backward compatibility
       const books1 = await client.get('books1');
       console.log('📚 Books from Redis (paginated):', {
         hasData: !!books1,
@@ -222,7 +479,7 @@ export async function GET(request: NextRequest) {
       await client.disconnect();
       return NextResponse.json(books1 ? JSON.parse(books1) : null);
     } else if (type && type.startsWith('movies') && type !== 'movies') {
-      // Handle movies2, movies3, movies4
+      // Handle movies2, movies3, movies4, movies5, movies6
       const key = type; // e.g., 'movies2'
       const data = await client.get(key);
       console.log(`🎬 ${key} from Redis:`, {
@@ -283,9 +540,27 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// DELETE handler (deprecated - cache clearing now handled in-memory)
+export async function DELETE(request: NextRequest) {
+  console.log('⚠️ Cache delete request received - cache clearing now handled in-memory');
+  return NextResponse.json({ success: false, message: 'Cache clearing now handled in-memory' });
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { action } = await request.json()
+    const { searchParams } = new URL(request.url)
+    const type = searchParams.get('type')
+
+    // Parse the request body once
+    const body = await request.json()
+
+    if (type === 'save-cache') {
+      console.log('⚠️ Cache save request received - now using in-memory caching');
+      return NextResponse.json({ success: false, message: 'Caching now handled in-memory' });
+    }
+
+    // Handle other POST requests
+    const action = body.action
     
     if (action === 'populate') {
       const tmdbApiKey = process.env.TMDB_API_KEY!
