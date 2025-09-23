@@ -45,7 +45,14 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await getServerSession(authOptions);
+  let session = null;
+  
+  try {
+    session = await getServerSession(authOptions);
+  } catch (error) {
+    console.warn('Failed to get server session:', error);
+    session = null;
+  }
 
   return (
     <html lang="en" suppressHydrationWarning>

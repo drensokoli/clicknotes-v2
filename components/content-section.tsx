@@ -135,7 +135,7 @@ export function ContentSection({
 
     const currentDataCount = allMediaData[mediaType].length;
     const startIndex = currentDataCount;
-    const endIndex = startIndex + 9; // Prefetch next 10 items
+    const endIndex = startIndex + 19; // Prefetch next 20 items
 
     console.log(`🔄 Background prefetch: ${mediaType} IDs from ranking range: ${startIndex}-${endIndex}`);
 
@@ -222,7 +222,7 @@ export function ContentSection({
 
     const currentDataCount = allMediaData[mediaType].length;
     const startIndex = currentDataCount;
-    const endIndex = startIndex + 9; // Fetch next 10 items (0-indexed, so 9 is the 10th item)
+    const endIndex = startIndex + 19; // Fetch next 20 items (0-indexed, so 19 is the 20th item)
 
     setIsLoadingNextPage(true);
 
@@ -291,7 +291,7 @@ export function ContentSection({
 
         // Update display count to show the new items
         setDisplayCounts(prev => {
-          const newCount = prev[mediaType] + 10;
+          const newCount = prev[mediaType] + 20;
           return {
             ...prev,
             [mediaType]: newCount
@@ -340,11 +340,11 @@ export function ContentSection({
       return;
     }
 
-    // Load 10 more items from current data
+    // Load 20 more items from current data
     setIsLoading(true);
 
     setTimeout(() => {
-      const newDisplayCount = currentDisplayCount + 10;
+      const newDisplayCount = currentDisplayCount + 20;
       setDisplayCounts(prev => ({
         ...prev,
         [activeSection]: newDisplayCount
@@ -353,12 +353,12 @@ export function ContentSection({
 
       // Trigger prefetch when we're about to show the last portion of current cache
       // For the initial 40 items: prefetch when showing 21-30 items (so 41-50 is ready when we reach 31-40)
-      // For subsequent batches: prefetch when we're 10 items from the end of loaded data
-      const prefetchThreshold = loadedCount <= 40 ? 30 : loadedCount - 10;
+      // For subsequent batches: prefetch when we're 20 items from the end of loaded data
+      const prefetchThreshold = loadedCount <= 40 ? 30 : loadedCount - 20;
       const shouldPrefetch = newDisplayCount >= prefetchThreshold && currentRankingPosition[activeSection] < 999;
 
       if (shouldPrefetch) {
-        console.log(`🔄 Prefetch triggered: displaying ${newDisplayCount}/${loadedCount} items, prefetching next 10 items`);
+        console.log(`🔄 Prefetch triggered: displaying ${newDisplayCount}/${loadedCount} items, prefetching next 20 items`);
         prefetchNextBatch(activeSection);
       }
     }, 0);
@@ -587,7 +587,7 @@ export function ContentSection({
   }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <div className="container mx-auto px-4 sm:px-6 sm:pt-12">
       {/* Header */}
       <div className="mb-8 sm:mb-12">
         {/* Search Bar */}
@@ -782,12 +782,10 @@ export function ContentSection({
         </div>
       )}
 
-      {/* Progressive Loading Indicator */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-8">
-          <div className="flex items-center gap-3 text-muted-foreground">
-            <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-          </div>
+      {/* Next Page Loading Indicator */}
+      {isLoadingNextPage && (
+        <div className="flex items-center justify-center pt-8">
+          <div className="loader"></div>
         </div>
       )}
 

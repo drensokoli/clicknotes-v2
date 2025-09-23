@@ -4,6 +4,9 @@ import { fetchJSON } from '../../../lib/secure-fetch'
 import { sendEmail } from '../../../lib/email-service'
 import { Book, Movie, TVShow } from '@/components/media-card'
 
+// Force dynamic execution to prevent caching issues with Vercel cron jobs
+export const dynamic = 'force-dynamic'
+
 // Type definitions for API responses
 // interface Movie {
 //   id: number;
@@ -1444,156 +1447,100 @@ async function sendErrorNotification(mediaType: string, error: Error | string, o
 
 export async function GET(request: NextRequest) {
   try {
-    const client = createRedisClient()
-    await client.connect()
-
-    const { searchParams } = new URL(request.url)
-    const type = searchParams.get('type')
+    console.log('[CRON] Vercel cron job started...');
+    console.log('[CRON] Request URL:', request.url);
+    console.log('[CRON] Request headers:', {
+      userAgent: request.headers.get('user-agent'),
+      vercelCron: request.headers.get('x-vercel-cron')
+    });
     
-    console.log('Redis GET request received:', request.url);
-    console.log('Requested type:', type);
+    const tmdbApiKey = process.env.TMDB_API_KEY!
+    const googleBooksApiKey = process.env.GOOGLE_BOOKS_API_KEY_2!
+    const nyTimesApiKey = process.env.NYTIMES_API_KEY!
+    const omdbApiKeys = [
+      process.env.OMDB_API_KEY_1!,
+      process.env.OMDB_API_KEY_2!,
+      process.env.OMDB_API_KEY_3!,
+    ]
 
-    // Add a special case to list all keys for debugging
-    if (type === 'debug') {
-      const keys = await client.keys('*');
-      console.log('All Redis keys:', keys);
-      await client.disconnect();
-      return NextResponse.json({ keys, message: 'Debug info' });
+    console.log('[CRON] API Keys available:', {
+      tmdb: !!tmdbApiKey,
+      tmdbKeyLength: tmdbApiKey?.length || 0,
+      googleBooks: !!googleBooksApiKey,
+      googleBooksKeyLength: googleBooksApiKey?.length || 0,
+      nyTimes: !!nyTimesApiKey,
+      nyTimesKeyLength: nyTimesApiKey?.length || 0,
+      omdb: omdbApiKeys.filter(k => !!k).length,
+      omdbKeys: omdbApiKeys.map((k, i) => ({ index: i, hasKey: !!k, keyLength: k?.length || 0 }))
+    });
+
+    // Validate required API keys
+    if (!tmdbApiKey || !googleBooksApiKey || !nyTimesApiKey) {
+      throw new Error('Missing required API keys for cron job');
     }
 
-    // Handle individual media items
-    if (type?.startsWith('movie:')) {
-      const data = await client.get(type)
-
-      // Validate JSON parsing
-      let parsedData = null;
-      if (data) {
-        try {
-          parsedData = JSON.parse(data);
-          console.log(`🎬 ✅ Movie ${type} successfully parsed from JSON (${data.length} chars)`);
-        } catch (parseError) {
-          console.error(`🎬 ❌ Failed to parse movie ${type} from JSON:`, parseError);
-          console.error(`🎬 Raw data:`, data.substring(0, 200) + '...');
-        }
-      }
-
-      console.log(`${type} from Redis:`, {
-        hasData: !!data,
-        dataType: typeof data,
-        movieTitle: parsedData ? parsedData.title : 'N/A'
-      });
-      await client.disconnect()
-      return NextResponse.json(parsedData)
-    } else if (type?.startsWith('tvshow:')) {
-      const data = await client.get(type)
-
-      // Validate JSON parsing
-      let parsedData = null;
-      if (data) {
-        try {
-          parsedData = JSON.parse(data);
-          console.log(`📺 ✅ TV Show ${type} successfully parsed from JSON (${data.length} chars)`);
-        } catch (parseError) {
-          console.error(`📺 ❌ Failed to parse TV show ${type} from JSON:`, parseError);
-          console.error(`📺 Raw data:`, data.substring(0, 200) + '...');
-        }
-      }
-
-      console.log(`${type} from Redis:`, {
-        hasData: !!data,
-        dataType: typeof data,
-        tvShowName: parsedData ? parsedData.name : 'N/A'
-      });
-      await client.disconnect()
-      return NextResponse.json(parsedData)
-    } else if (type?.startsWith('book:')) {
-      const data = await client.get(type)
-
-      // Validate JSON parsing
-      let parsedData = null;
-      if (data) {
-        try {
-          parsedData = JSON.parse(data);
-          console.log(`📚 ✅ Book ${type} successfully parsed from JSON (${data.length} chars)`);
-        } catch (parseError) {
-          console.error(`📚 ❌ Failed to parse book ${type} from JSON:`, parseError);
-          console.error(`📚 Raw data:`, data.substring(0, 200) + '...');
-        }
-      }
-
-      console.log(`${type} from Redis:`, {
-        hasData: !!data,
-        dataType: typeof data,
-        bookTitle: parsedData ? parsedData.volumeInfo?.title : 'N/A'
-      });
-      await client.disconnect()
-      return NextResponse.json(parsedData)
-    }
-    // Handle popularity rankings
-    else if (type === 'popular_ranking:movies') {
-      const ranking = await client.zRangeWithScores(type, 0, -1)
-      console.log(`${type} from Redis:`, {
-        hasData: !!ranking,
-        count: ranking.length,
-        sample: ranking.slice(0, 3).map((item) => ({ id: item.value, rank: item.score }))
-      });
-      await client.disconnect()
-      return NextResponse.json(ranking || [])
-    } else if (type === 'popular_ranking:tvshows') {
-      const ranking = await client.zRangeWithScores(type, 0, -1)
-      console.log(`${type} from Redis:`, {
-        hasData: !!ranking,
-        count: ranking.length,
-        sample: ranking.slice(0, 3).map((item) => ({ id: item.value, rank: item.score }))
-      });
-      await client.disconnect()
-      return NextResponse.json(ranking || [])
-    } else if (type === 'popular_ranking:books') {
-      const ranking = await client.zRangeWithScores(type, 0, -1)
-      console.log(`${type} from Redis:`, {
-        hasData: !!ranking,
-        count: ranking.length,
-        sample: ranking.slice(0, 3).map((item) => ({ id: item.value, rank: item.score }))
-      });
-      await client.disconnect()
-      return NextResponse.json(ranking || [])
-    }
-    // Handle backward compatibility for old paginated keys
-    else if (type && (type.startsWith('movies') || type.startsWith('tvshows') || type.startsWith('books'))) {
-      const data = await client.get(type)
-      console.log(`${type} from Redis:`, {
-        hasData: !!data,
-        dataType: typeof data,
-        length: data ? JSON.parse(data).length : 0
-      });
-      await client.disconnect()
-      return NextResponse.json(data ? JSON.parse(data) : null)
-    } else {
-      // Return ranking data for all media types
-      console.log('Fetching all ranking data from Redis...');
-      const [movieRanking, tvShowRanking, bookRanking] = await Promise.all([
-        client.zRangeWithScores('popular_ranking:movies', 0, -1),
-        client.zRangeWithScores('popular_ranking:tvshows', 0, -1),
-        client.zRangeWithScores('popular_ranking:books', 0, -1)
-      ])
-
-      console.log('All Redis ranking data:', {
-        movieRanking: movieRanking.length,
-        tvShowRanking: tvShowRanking.length,
-        bookRanking: bookRanking.length
-      });
-
-      await client.disconnect()
-
-      return NextResponse.json({
-        movieRanking,
-        tvShowRanking,
-        bookRanking
-      })
-    }
+    // Populate movies and books in parallel (different APIs, no rate limiting conflict)
+    console.log('[CRON] Starting parallel population of movies and books...');
+    const startTime = Date.now();
+    
+    const [movies, books] = await Promise.all([
+      populateMovies(tmdbApiKey, omdbApiKeys),
+      populateBooks(googleBooksApiKey, nyTimesApiKey)
+    ]);
+    
+    console.log('[CRON] Movies and books population completed!');
+    console.log('[CRON] Movies count:', movies.length);
+    console.log('[CRON] Books count:', books.length);
+    
+    // Now populate TV shows (after movies finish to avoid TMDB rate limiting)
+    console.log('[CRON] Starting TV shows population (after movies to avoid TMDB rate limiting)...');
+    const tvShowsStartTime = Date.now();
+    
+    const tvShows = await populateTVShows(tmdbApiKey, omdbApiKeys);
+    
+    const tvShowsEndTime = Date.now();
+    const tvShowsDuration = tvShowsEndTime - tvShowsStartTime;
+    
+    const endTime = Date.now();
+    const totalDuration = endTime - startTime;
+    
+    console.log('[CRON] Complete data population finished!');
+    console.log('[CRON] Total population duration:', `${totalDuration}ms (${Math.round(totalDuration / 1000)}s)`);
+    console.log('[CRON] TV shows population duration:', `${tvShowsDuration}ms (${Math.round(tvShowsDuration / 1000)}s)`);
+    console.log('[CRON] Final counts:', {
+      movies: movies.length,
+      tvShows: tvShows.length,
+      books: books.length
+    });
+    
+    const response = { 
+      message: 'Cron job completed - data populated successfully',
+      movies: movies.length,
+      tvshows: tvShows.length,
+      books: books.length,
+      totalDuration: `${totalDuration}ms`,
+      tvShowsDuration: `${tvShowsDuration}ms`,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log('[CRON] Sending cron response:', response);
+    return NextResponse.json(response);
   } catch (error) {
-    console.error('Redis GET error:', error)
-    return NextResponse.json(null, { status: 404 })
+    console.error('[CRON] Cron job failed:', error);
+    console.error('[CRON] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+      timestamp: new Date().toISOString()
+    });
+    
+    // Send error notification email for cron job failure
+    await sendErrorNotification('general', error as Error, 'Cron job execution');
+    
+    return NextResponse.json({ 
+      error: 'Cron job failed',
+      details: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    }, { status: 500 });
   }
 }
 

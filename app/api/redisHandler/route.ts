@@ -290,6 +290,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Load server cache from Redis (disabled - no longer storing in Redis)
+    if (type === 'server-cache') {
+      console.log('⚠️ Server cache request - no longer storing cache in Redis');
+      await client.disconnect();
+      return NextResponse.json(null);
+    }
+
     // Load cache from Redis (deprecated - now using in-memory caching)
     if (type === 'load-cache') {
       console.log('⚠️ Cache load request received - now using in-memory caching');
@@ -553,6 +560,11 @@ export async function POST(request: NextRequest) {
 
     // Parse the request body once
     const body = await request.json()
+
+    if (type === 'save-server-cache') {
+      console.log('⚠️ Server cache save request - no longer storing cache in Redis');
+      return NextResponse.json({ success: false, message: 'Server cache no longer stored in Redis' });
+    }
 
     if (type === 'save-cache') {
       console.log('⚠️ Cache save request received - now using in-memory caching');

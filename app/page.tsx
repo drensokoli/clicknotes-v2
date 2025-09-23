@@ -37,22 +37,46 @@ interface ServerCache {
   lastFetched: number;
 }
 
-let serverCache: ServerCache | null = null;
 const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
-// Helper function to save cache to server memory
-function saveCacheToMemory(cacheData: ServerCache) {
-  serverCache = cacheData;
-  console.log('💾 Cache saved to server memory');
+// In-memory cache as fallback (for current session only)
+let memoryCache: ServerCache | null = null;
+
+// Helper function to check for cached media data (disabled - no longer using Redis cache)
+async function getCachedMediaData(baseUrl: string) {
+  console.log('🔍 [SERVER COMPONENT] Cache checking disabled - no longer using Redis cache');
+  return null;
 }
 
-// Helper function to load cache from server memory
-function loadCacheFromMemory() {
-  if (serverCache && (Date.now() - serverCache.lastFetched) < CACHE_DURATION) {
-    console.log('📥 Cache loaded from server memory');
-    return serverCache;
+// Helper function to save cache via API
+async function saveCacheData(baseUrl: string, cacheData: ServerCache) {
+  try {
+    // Create a simplified cache to reduce memory usage
+    const simplifiedCache = {
+      movies: cacheData.movies,
+      tvshows: cacheData.tvshows,
+      books: cacheData.books,
+      movieRanking: cacheData.movieRanking,
+      tvShowRanking: cacheData.tvShowRanking,
+      bookRanking: cacheData.bookRanking,
+      lastFetched: cacheData.lastFetched
+    };
+
+    console.log('💾 Saving server cache to Redis...');
+    const response = await fetch(`${baseUrl}/api/redisHandler?type=save-server-cache`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(simplifiedCache)
+    });
+    
+    if (response.ok) {
+      console.log('💾 Cache saved to Redis successfully');
+    } else {
+      console.error('❌ Failed to save cache to Redis');
+    }
+  } catch (error) {
+    console.error('❌ Error saving cache:', error);
   }
-  return null;
 }
 
 // Helper function to fetch specific page from data source using ranking system
@@ -60,15 +84,18 @@ async function fetchPageFromDataSource(baseUrl: string, mediaType: string, page:
   try {
     console.log(`🔍 Fetching ${mediaType} page ${page} from data source...`)
 
-    // For page 1, fetch the first 40 items using ranking system
+    // For page 1, fetch the first 20 items using ranking system
     if (page === 1) {
       const startIndex = 0;
-      const endIndex = 39; // Fetch first 40 items (0-indexed)
+      const endIndex = 19; // Fetch first 20 items (0-indexed)
 
       try {
-        // Step 1: Get the first 40 IDs from the ranking
+        // Step 1: Get the first 20 IDs from the ranking
         console.log(`📊 Fetching ${mediaType} IDs from ranking range: ${startIndex}-${endIndex}`)
-        const rankingResponse = await fetch(`${baseUrl}/api/redisHandler?type=ranking-range&mediaType=${mediaType}&start=${startIndex}&end=${endIndex}`)
+        const rankingResponse = await fetch(`${baseUrl}/api/redisHandler?type=ranking-range&mediaType=${mediaType}&start=${startIndex}&end=${endIndex}`, {
+          cache: 'force-cache',
+          next: { revalidate: 60 * 60 * 24 * 7 } // Cache for 7 days
+        })
 
         if (!rankingResponse.ok) {
           console.error(`❌ Failed to fetch ranking range for ${mediaType}`)
@@ -93,7 +120,10 @@ async function fetchPageFromDataSource(baseUrl: string, mediaType: string, page:
                                  mediaType === 'books' ? 'book' : mediaType
 
         console.log(`🎬 Fetching ${ids.length} ${mediaType} items by IDs`)
-        const itemsResponse = await fetch(`${baseUrl}/api/redisHandler?type=fetch-by-ids&mediaType=${singularMediaType}&ids=${idsString}`)
+        const itemsResponse = await fetch(`${baseUrl}/api/redisHandler?type=fetch-by-ids&mediaType=${singularMediaType}&ids=${idsString}`, {
+          cache: 'force-cache',
+          next: { revalidate: 60 * 60 * 24 * 7 } // Cache for 7 days
+        })
 
         if (!itemsResponse.ok) {
           console.error(`❌ Failed to fetch ${mediaType} items by IDs`)
@@ -118,6 +148,7 @@ async function fetchPageFromDataSource(baseUrl: string, mediaType: string, page:
       // For other pages, fall back to old structure for backward compatibility
       const key = `${mediaType}${page}`;
       const response = await fetch(`${baseUrl}/api/redisHandler?type=${key}`, {
+        cache: 'force-cache',
         next: { revalidate: 60 * 60 * 24 * 7 } // Cache for 7 days
       })
 
@@ -145,30 +176,26 @@ async function fetchPageFromDataSource(baseUrl: string, mediaType: string, page:
 async function getCachedData(baseUrl: string) {
   const now = Date.now();
 
-  // Try to load cache from memory first
-  const cachedData = loadCacheFromMemory();
-
-  // Check if we have valid cached data (only require movies and rankings)
-  if (cachedData &&
-      cachedData.lastFetched &&
-      (now - cachedData.lastFetched) < CACHE_DURATION &&
-      cachedData.movies &&
-      cachedData.movieRanking) {
-
-    const cacheAgeHours = Math.round((now - cachedData.lastFetched) / (1000 * 60 * 60));
-    console.log('✅ Using cached data (age:', cacheAgeHours, 'hours)');
-
+  // Check in-memory cache first (for current serverless instance)
+  if (memoryCache && memoryCache.movies && memoryCache.movies.length > 0) {
+    const cacheAge = Math.round((now - memoryCache.lastFetched) / (1000 * 60 * 60));
+    console.log(`📥 [SERVERLESS INSTANCE CACHE] ⚡️ Serving from current instance memory (age: ${cacheAge} hours)`);
+    console.log(`📊 [INSTANCE CACHED] Movies: ${memoryCache.movies.length}, TV Shows: ${memoryCache.tvshows?.length || 0}, Books: ${memoryCache.books?.length || 0}`);
+    
     return {
-      movies: cachedData.movies,
-      tvshows: cachedData.tvshows || [], // Use empty array if missing
-      books: cachedData.books || [], // Use empty array if missing
-      movieRanking: cachedData.movieRanking,
-      tvShowRanking: cachedData.tvShowRanking || [], // Use empty array if missing
-      bookRanking: cachedData.bookRanking || [] // Use empty array if missing
+      movies: memoryCache.movies,
+      tvshows: memoryCache.tvshows || [],
+      books: memoryCache.books || [],
+      movieRanking: memoryCache.movieRanking || [],
+      tvShowRanking: memoryCache.tvShowRanking || [],
+      bookRanking: memoryCache.bookRanking || []
     };
   }
   
-  console.log('🔄 Cache expired or missing, fetching fresh data from Redis...');
+  // Redis cache checking disabled - only use in-memory cache
+  console.log('🔍 [SERVER COMPONENT] Redis cache disabled - only using in-memory cache for this serverless instance');
+  
+  console.log('🔄 [SERVER COMPONENT] No server cache found, will populate fresh data from Redis...');
   // Silent - remove cache status logging
   // console.log('📊 Cache status:', {
   //   hasCachedData: !!cachedData,
@@ -211,11 +238,15 @@ async function getCachedData(baseUrl: string) {
       bookRanking: popularRankings.bookRanking || [] // Use empty array if missing
     };
 
-    // Save to memory for persistence
-    saveCacheToMemory(cacheData);
+    // Save to in-memory cache for this serverless instance
+    memoryCache = cacheData;
+    console.log('💾 [SERVERLESS INSTANCE] Saved to current instance memory');
+    
+    // Save cache for persistence to Redis (disabled - no longer storing in Redis)
+    // await saveCacheData(baseUrl, cacheData);
 
-    console.log('💾 Updated server cache with available data');
-    console.log(`📊 Cached: ${hasMovies ? dataMovies.value!.length : 0} movies, ${popularRankings.movieRanking?.length || 0} movie rankings`);
+    console.log('💾 [SERVER COMPONENT] Data saved and will be cached by Next.js server components');
+    console.log(`📊 [CACHED COUNT] Movies: ${hasMovies ? dataMovies.value!.length : 0}, TV Shows: ${hasTVShows ? dataTVShows.value!.length : 0}, Books: ${hasBooks ? dataBooks.value!.length : 0}`);
 
     return {
       movies: hasMovies ? dataMovies.value! : [],
@@ -236,7 +267,8 @@ async function fetchPopularRankings(baseUrl: string) {
   try {
     console.log('📊 Fetching entire popular rankings from Redis...');
     const response = await fetch(`${baseUrl}/api/redisHandler?type=popular-rankings`, {
-      cache: 'no-store'
+      cache: 'force-cache',
+      next: { revalidate: 60 * 60 * 24 * 7 } // Cache for 7 days
     });
 
     if (response.ok) {
@@ -263,9 +295,18 @@ async function fetchPopularRankings(baseUrl: string) {
 }
 
 // Helper function to clear cache (useful for development/testing)
-function clearServerCache() {
-  serverCache = null;
-  console.log('🗑️ Server cache cleared');
+async function clearServerCache() {
+  try {
+    // Clear in-memory cache
+    memoryCache = null;
+    
+    // Revalidate the Next.js cache tags
+    const { revalidateTag } = await import('next/cache');
+    revalidateTag('server-media-cache');
+    console.log('🗑️ Server cache cleared');
+  } catch (error) {
+    console.error('❌ Error clearing cache:', error);
+  }
 }
 
 // Expose cache clearing function globally for development
@@ -302,6 +343,8 @@ async function getActiveRedis(baseUrl: string) {
 }
 
 export default async function Home() {
+  console.log('🏗️ [SERVER COMPONENT] Home component rendering on server-side...');
+  
   const tmdbApiKey = process.env.TMDB_API_KEY!
   const googleBooksApiKey = process.env.GOOGLE_BOOKS_API_KEY_2!
   const nyTimesApiKey = process.env.NYTIMES_API_KEY!
@@ -332,12 +375,12 @@ export default async function Home() {
     // Step 1: Try to get cached data or fetch if needed
     console.log('🚀 Starting data fetch for server-side props...')
 
-    // Try to get cached data first
+    // Try to get cached data first (only in-memory cache now)
     const cachedData = await getCachedData(baseUrl);
 
     if (cachedData) {
-      // Use cached data
-      console.log('✅ Using cached data for server-side props');
+      // Use cached data from in-memory cache
+      console.log('✅ [SERVER COMPONENT] Using in-memory cached data for server-side props');
       movies = cachedData.movies || [];
       tvShows = cachedData.tvshows || [];
       books = cachedData.books || [];
@@ -357,13 +400,13 @@ export default async function Home() {
         throw new Error('No Redis available')
       }
       
-      console.log('📊 Fetching first 40 items from data source...')
+      console.log('📊 Fetching first 20 items from data source...')
 
-      // Fetch the first 40 items from each media type using new structure
+      // Fetch the first 20 items from each media type using new structure
       const [dataMovies, dataTVShows, dataBooks, rankingsResult] = await Promise.allSettled([
-        fetchPageFromDataSource(activeRedis, 'movies', 1),   // First 40 movies from popular ranking
-        fetchPageFromDataSource(activeRedis, 'tvshows', 1),  // First 40 TV shows from popular ranking
-        fetchPageFromDataSource(activeRedis, 'books', 1),    // First 40 books from popular ranking
+        fetchPageFromDataSource(activeRedis, 'movies', 1),   // First 20 movies from popular ranking
+        fetchPageFromDataSource(activeRedis, 'tvshows', 1),  // First 20 TV shows from popular ranking
+        fetchPageFromDataSource(activeRedis, 'books', 1),    // First 20 books from popular ranking
         fetchPopularRankings(activeRedis)               // Get entire rankings
       ])
 

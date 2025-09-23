@@ -28,6 +28,14 @@ if (process.env.NODE_ENV === "development") {
   clientPromise = client.connect()
 }
 
+// Add error handling for MongoDB connection failures
+clientPromise = clientPromise.catch((error) => {
+  console.warn('MongoDB connection failed:', error.message);
+  // Return a mock client promise that resolves to null
+  // This prevents the app from crashing when MongoDB is unavailable
+  return Promise.resolve(null as any);
+});
+
 // Export a module-scoped MongoClient promise. By doing this in a
 // separate module, the client can be shared across functions.
 export default clientPromise
