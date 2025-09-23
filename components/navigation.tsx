@@ -122,7 +122,7 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
     const timer = setTimeout(runInitialAnimation, 100) // Near-instant start
 
     return () => clearTimeout(timer)
-  }, [carouselApi, isInitialAnimation, navItems, hasRunInitialAnimation])
+  }, [carouselApi, isInitialAnimation, navItems, hasRunInitialAnimation, activeSection])
 
   return (
     <>

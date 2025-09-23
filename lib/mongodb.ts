@@ -33,7 +33,7 @@ clientPromise = clientPromise.catch((error) => {
   console.warn('MongoDB connection failed:', error.message);
   // Return a mock client promise that resolves to null
   // This prevents the app from crashing when MongoDB is unavailable
-  return Promise.resolve(null as any);
+  return Promise.resolve(null as unknown as MongoClient);
 });
 
 // Export a module-scoped MongoClient promise. By doing this in a

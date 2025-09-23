@@ -85,21 +85,30 @@ export function ContentSection({
 
   const setSearchQuery = useCallback((query: string) => {
     if (externalSearchQuery !== undefined && onSearchChange) {
-      // If external state is provided, notify parent
-      onSearchChange(query, searchResults)
+      // If external state is provided, notify parent only if the query is different
+      if (query !== externalSearchQuery) {
+        onSearchChange(query, externalSearchResults ?? [])
+      }
       return
     }
     setInternalSearchQuery(query)
-  }, [externalSearchQuery, onSearchChange])
+  }, [externalSearchQuery, onSearchChange, externalSearchResults])
 
   const setSearchResults = useCallback((results: MediaItem[]) => {
     if (externalSearchQuery !== undefined && onSearchChange) {
-      // If external state is provided, notify parent
-      onSearchChange(searchQuery, results)
+      // If external state is provided, notify parent only if results are different
+      // Compare length and first few items to avoid deep comparison
+      const currentResults = externalSearchResults ?? []
+      const isDifferent = currentResults.length !== results.length || 
+        (results.length > 0 && currentResults.length > 0 && currentResults[0]?.id !== results[0]?.id)
+      
+      if (isDifferent) {
+        onSearchChange(externalSearchQuery ?? "", results)
+      }
       return
     }
     setInternalSearchResults(results)
-  }, [externalSearchQuery, onSearchChange])
+  }, [externalSearchQuery, onSearchChange, externalSearchResults])
 
   const [isSearching, setIsSearching] = useState(false)
   const [displayCounts, setDisplayCounts] = useState({
@@ -212,7 +221,7 @@ export function ContentSection({
       // Reset prefetching flag
       setIsPrefetching(prev => ({ ...prev, [mediaType]: false }));
     }
-  }, [isLoadingNextPage, searchQuery, allMediaData, currentRankingPosition, displayCounts, isPrefetching]);
+  }, [isLoadingNextPage, searchQuery, allMediaData, isPrefetching]);
 
   // Function to fetch next batch using ranking system (with loading states)
   const fetchNextBatch = useCallback(async (mediaType: Section) => {
@@ -316,7 +325,7 @@ export function ContentSection({
     } finally {
       setIsLoadingNextPage(false);
     }
-  }, [isLoadingNextPage, searchQuery, allMediaData, currentRankingPosition, displayCounts, isPrefetching]);
+  }, [isLoadingNextPage, searchQuery, allMediaData, isPrefetching]);
 
   // Handle infinite scroll with progressive loading and prefetching
   const loadMore = useCallback(async () => {
@@ -403,16 +412,22 @@ export function ContentSection({
       // Check initial hash
       const hash = window.location.hash.slice(1) as Section
       if (hash && ["movies", "tvshows", "books"].includes(hash)) {
-        setActiveSection(hash)
+        if (externalActiveSection === undefined) {
+          setInternalActiveSection(hash)
+        }
       }
 
       // Listen for hash changes
       const handleHashChange = () => {
         const newHash = window.location.hash.slice(1) as Section
         if (newHash && ["movies", "tvshows", "books"].includes(newHash)) {
-          setActiveSection(newHash)
-          setSearchQuery("")
-          setSearchResults([])
+          if (externalActiveSection === undefined) {
+            setInternalActiveSection(newHash)
+          }
+          if (externalSearchQuery === undefined) {
+            setInternalSearchQuery("")
+            setInternalSearchResults([])
+          }
         }
       }
 
@@ -422,7 +437,7 @@ export function ContentSection({
       // Mark as initialized when using external state
       setIsInitialized(true)
     }
-  }, [externalActiveSection])
+  }, [externalActiveSection, externalSearchQuery])
 
   // Scroll to top when switching sections
   useEffect(() => {
@@ -475,7 +490,7 @@ export function ContentSection({
     }, 300)
 
     return () => clearTimeout(debounceTimeout.current!)
-  }, [searchQuery, activeSection, tmdbApiKey, googleBooksApiKey])
+  }, [searchQuery, activeSection, tmdbApiKey, googleBooksApiKey, setSearchResults])
 
   const getCurrentData = (): MediaItem[] => {
     if (searchQuery.trim() && searchResults.length > 0) {

@@ -180,8 +180,6 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
-    const page = searchParams.get('page')
-    const limit = searchParams.get('limit')
     
     // Silent - remove request details logging
     // console.log('📋 Requested type:', type, 'page:', page, 'limit:', limit);
@@ -548,7 +546,7 @@ export async function GET(request: NextRequest) {
 }
 
 // DELETE handler (deprecated - cache clearing now handled in-memory)
-export async function DELETE(request: NextRequest) {
+export async function DELETE() {
   console.log('⚠️ Cache delete request received - cache clearing now handled in-memory');
   return NextResponse.json({ success: false, message: 'Cache clearing now handled in-memory' });
 }

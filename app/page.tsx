@@ -37,47 +37,8 @@ interface ServerCache {
   lastFetched: number;
 }
 
-const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
-
 // In-memory cache as fallback (for current session only)
 let memoryCache: ServerCache | null = null;
-
-// Helper function to check for cached media data (disabled - no longer using Redis cache)
-async function getCachedMediaData(baseUrl: string) {
-  console.log('🔍 [SERVER COMPONENT] Cache checking disabled - no longer using Redis cache');
-  return null;
-}
-
-// Helper function to save cache via API
-async function saveCacheData(baseUrl: string, cacheData: ServerCache) {
-  try {
-    // Create a simplified cache to reduce memory usage
-    const simplifiedCache = {
-      movies: cacheData.movies,
-      tvshows: cacheData.tvshows,
-      books: cacheData.books,
-      movieRanking: cacheData.movieRanking,
-      tvShowRanking: cacheData.tvShowRanking,
-      bookRanking: cacheData.bookRanking,
-      lastFetched: cacheData.lastFetched
-    };
-
-    console.log('💾 Saving server cache to Redis...');
-    const response = await fetch(`${baseUrl}/api/redisHandler?type=save-server-cache`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(simplifiedCache)
-    });
-    
-    if (response.ok) {
-      console.log('💾 Cache saved to Redis successfully');
-    } else {
-      console.error('❌ Failed to save cache to Redis');
-    }
-  } catch (error) {
-    console.error('❌ Error saving cache:', error);
-  }
-}
 
 // Helper function to fetch specific page from data source using ranking system
 async function fetchPageFromDataSource(baseUrl: string, mediaType: string, page: number = 1) {
