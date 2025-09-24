@@ -105,6 +105,9 @@ export function UserProfile() {
             width={36}
             height={36}
             className="rounded-full"
+            loading="lazy"
+            placeholder="blur"
+            blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPGNpcmNsZSBjeD0iMTgiIGN5PSIxOCIgcj0iMTgiIGZpbGw9IiMzQTNBNDQiLz4KPC9zdmc+"
           />
         ) : (
           <User className="w-5 h-5 sm:w-5 sm:h-5 text-primary" />

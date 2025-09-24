@@ -3,6 +3,7 @@ import { createClient, RedisClientType } from "@redis/client"
 import { fetchJSON } from '../../../lib/secure-fetch'
 import { sendEmail } from '../../../lib/email-service'
 import { Book, Movie, TVShow } from '@/components/media-card'
+import { optimizeMovieData, optimizeTVShowData, optimizeBookData, logOptimization } from '../../../lib/data-optimization'
 
 // Force dynamic execution to prevent caching issues with Vercel cron jobs
 export const dynamic = 'force-dynamic'
@@ -253,16 +254,14 @@ async function fetchMovieWithDetails(movie: Movie, tmdbApiKey: string, omdbApiKe
       stremioLink
     };
     
-    console.log(`[MOVIE] Final movie structure for ${movie.title}:`, {
-      hasDetails: !!movieWithDetails.details,
-      hasOmdbData: !!movieWithDetails.omdbData,
-      hasStremioLink: !!movieWithDetails.stremioLink,
-      totalKeys: Object.keys(movieWithDetails).length,
-      keys: Object.keys(movieWithDetails)
-    });
+    // Optimize the data to reduce payload size
+    const optimizedMovie = optimizeMovieData(movieWithDetails);
+    
+    // Log the optimization results
+    logOptimization(`Movie: ${movie.title}`, movieWithDetails, optimizedMovie);
     
     console.log(`[MOVIE] Completed movie: ${movie.title} - Has details: ${!!details}, Has OMDB: ${!!omdbData}`);
-    return movieWithDetails;
+    return optimizedMovie;
   } catch (error) {
     console.error(`[MOVIE] Error fetching details for movie ${movie.title}:`, error);
     console.error(`[MOVIE] Error details:`, {
@@ -391,16 +390,14 @@ async function fetchTVShowWithDetails(tvShow: TVShow, tmdbApiKey: string, omdbAp
       stremioLink
     };
     
-    console.log(`[TVSHOW] Final TV show structure for ${tvShow.name}:`, {
-      hasDetails: !!tvShowWithDetails.details,
-      hasOmdbData: !!tvShowWithDetails.omdbData,
-      hasStremioLink: !!tvShowWithDetails.stremioLink,
-      totalKeys: Object.keys(tvShowWithDetails).length,
-      keys: Object.keys(tvShowWithDetails)
-    });
+    // Optimize the data to reduce payload size
+    const optimizedTVShow = optimizeTVShowData(tvShowWithDetails);
+    
+    // Log the optimization results
+    logOptimization(`TV Show: ${tvShow.name}`, tvShowWithDetails, optimizedTVShow);
     
     console.log(`[TVSHOW] Completed TV show: ${tvShow.name} - Has details: ${!!details}, Has OMDB: ${!!omdbData}`);
-    return tvShowWithDetails;
+    return optimizedTVShow;
   } catch (error) {
     console.error(`[TVSHOW] Error fetching details for TV show ${tvShow.name}:`, error);
     console.error(`[TVSHOW] Error details:`, {
@@ -1204,7 +1201,13 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string) {
             }
           };
           
-          booksWithDetails.push(bookWithDetails);
+          // Optimize the book data to reduce payload size
+          const optimizedBook = optimizeBookData(bookWithDetails);
+          
+          // Log the optimization results
+          logOptimization(`Book: ${bookTitle}`, bookWithDetails, optimizedBook);
+          
+          booksWithDetails.push(optimizedBook);
           console.log(`[POPULATE] Book "${bookTitle}" processed. Total: ${booksWithDetails.length}`);
         } else {
           console.log(`[POPULATE] No Google Books data found for ISBN ${isbn}`);

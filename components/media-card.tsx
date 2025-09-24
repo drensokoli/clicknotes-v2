@@ -281,6 +281,9 @@ export function MediaCard({ item, className }: MediaCardProps) {
             src={getPosterUrl()!}
             alt={getTitle() || 'Media poster image'}
             fill
+            loading="lazy"
+            placeholder="blur"
+            blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgZmlsbD0iIzNBM0E0NCIvPgo8L3N2Zz4="
             className="object-cover transition-transform duration-300 ease-out group-hover:scale-105"
           />
         ) : (

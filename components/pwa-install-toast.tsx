@@ -193,6 +193,9 @@ export function PWAInstallToast() {
                         width={200}
                         height={100}
                         className="w-full"
+                        loading="lazy"
+                        placeholder="blur"
+                        blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzNBM0E0NCIvPgo8L3N2Zz4="
                       />
                     </div>
                   </div>
@@ -213,6 +216,9 @@ export function PWAInstallToast() {
                         width={200}
                         height={100}
                         className="w-full"
+                        loading="lazy"
+                        placeholder="blur"
+                        blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzNBM0E0NCIvPgo8L3N2Zz4="
                       />
                     </div>
                   </div>

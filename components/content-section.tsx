@@ -589,20 +589,13 @@ export function ContentSection({
         </div>
 
         {/* Grid Skeleton */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-6 md:gap-8">
-          {Array.from({ length: 24 }).map((_, index) => (
-            <div key={index}>
-              {/* Image Skeleton */}
-              <div className="aspect-[2/3] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-400 dark:to-gray-500 rounded-lg animate-pulse"></div>
-            </div>
-          ))}
-        </div>
+        
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 sm:pt-12">
+    <div className="container mx-auto px-4 sm:px-6 sm:pt-12 pt-8">
       {/* Header */}
       <div className="mb-8 sm:mb-12">
         {/* Search Bar */}
@@ -775,7 +768,7 @@ export function ContentSection({
                 key={`${item.type}-${item.id}-${index}`}
                 className={shouldAnimate ? "animate-in fade-in slide-in-from-bottom-4" : ""}
                 style={shouldAnimate ? { 
-                  animationDelay: `${Math.min(animationIndex * 50, 1000)}ms`, 
+                  animationDelay: `${Math.min(animationIndex * 50, 100)}ms`, 
                   animationFillMode: 'both' 
                 } : {}}
               >

@@ -393,6 +393,9 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                     src={getBackdropUrl()!}
                     alt={getTitle() || 'Media backdrop image'}
                     fill
+                    loading="lazy"
+                    placeholder="blur"
+                    blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI3MjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
                     className="object-cover"
                   />
                 ) : (
@@ -413,6 +416,9 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                             src={getPosterUrl()!}
                             alt={getTitle() || 'Media poster image'}
                             fill
+                            loading="lazy"
+                            placeholder="blur"
+                            blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgZmlsbD0iIzNBM0E0NCIvPgo8L3N2Zz4="
                             className="object-cover"
                           />
                         ) : (
@@ -655,6 +661,9 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                                   src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
                                   alt={actor.name}
                                   fill
+                                  loading="lazy"
+                                  placeholder="blur"
+                                  blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
                                   className="object-cover"
                                 />
                               ) : (
@@ -695,6 +704,9 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                               src={`https://image.tmdb.org/t/p/w185${getDirectorOrCreator()!.profile_path}`}
                               alt={getDirectorOrCreator()!.name}
                               fill
+                              loading="lazy"
+                              placeholder="blur"
+                              blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
                               className="object-cover"
                             />
                           ) : (
