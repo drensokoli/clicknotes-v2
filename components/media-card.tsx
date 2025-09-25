@@ -167,9 +167,11 @@ export type MediaItem = Movie | TVShow | Book
 interface MediaCardProps {
   item: MediaItem
   className?: string
+  priority?: boolean
+  loading?: "lazy" | "eager"
 }
 
-export function MediaCard({ item, className }: MediaCardProps) {
+export function MediaCard({ item, className, priority = false, loading = "lazy" }: MediaCardProps) {
   const { openModal } = useModal()
   const { resolvedTheme } = useTheme()
   const [showButtons, setShowButtons] = useState(false)
@@ -242,10 +244,12 @@ export function MediaCard({ item, className }: MediaCardProps) {
 
   const getPosterUrl = () => {
     if (item.type === "movie" && item.poster_path) {
-      return `https://image.tmdb.org/t/p/w500${item.poster_path}`;
+      // Use w342 for better size optimization (cards are ~150-200px wide)
+      return `https://image.tmdb.org/t/p/w342${item.poster_path}`;
     }
     if (item.type === "tvshow" && item.poster_path) {
-      return `https://image.tmdb.org/t/p/w500${item.poster_path}`;
+      // Use w342 for better size optimization (cards are ~150-200px wide)
+      return `https://image.tmdb.org/t/p/w342${item.poster_path}`;
     }
     if (item.type === "book" && item.volumeInfo?.imageLinks?.thumbnail) {
       return item.volumeInfo.imageLinks.thumbnail.replace('http:', 'https:');
@@ -281,7 +285,11 @@ export function MediaCard({ item, className }: MediaCardProps) {
             src={getPosterUrl()!}
             alt={getTitle() || 'Media poster image'}
             fill
-            loading="lazy"
+            loading={loading}
+            priority={priority}
+            fetchPriority={priority ? "high" : undefined}
+            quality={70}
+            sizes="(max-width: 640px) 45vw, (max-width: 768px) 30vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
             placeholder="blur"
             blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgZmlsbD0iIzNBM0E0NCIvPgo8L3N2Zz4="
             className="object-cover transition-transform duration-300 ease-out group-hover:scale-105"

@@ -203,7 +203,8 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
 
   const getPosterUrl = () => {
     if ('poster_path' in item && item.poster_path) {
-      return `https://image.tmdb.org/t/p/w500${item.poster_path}`
+      // Use w342 for modal poster (displayed at ~100-150px)
+      return `https://image.tmdb.org/t/p/w342${item.poster_path}`
     }
     if ('volumeInfo' in item && item.volumeInfo.imageLinks?.thumbnail) {
       return item.volumeInfo.imageLinks.thumbnail.replace('http:', 'https:')
@@ -213,7 +214,8 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
 
   const getBackdropUrl = () => {
     if ('backdrop_path' in item && item.backdrop_path) {
-      return `https://image.tmdb.org/t/p/w1280${item.backdrop_path}`
+      // Use w780 instead of w1280 for better performance (covers most screen sizes)
+      return `https://image.tmdb.org/t/p/w780${item.backdrop_path}`
     }
     // For books, use the cover image as backdrop
     if ('volumeInfo' in item && item.volumeInfo.imageLinks?.thumbnail) {
@@ -393,9 +395,11 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                     src={getBackdropUrl()!}
                     alt={getTitle() || 'Media backdrop image'}
                     fill
-                    loading="lazy"
-                    placeholder="blur"
-                    blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI3MjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
+                    quality={75}
+                    sizes="100vw"
+                    // loading="lazy"
+                    // placeholder="blur"
+                    // blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI3MjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
                     className="object-cover"
                   />
                 ) : (
@@ -416,9 +420,11 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                             src={getPosterUrl()!}
                             alt={getTitle() || 'Media poster image'}
                             fill
-                            loading="lazy"
-                            placeholder="blur"
-                            blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgZmlsbD0iIzNBM0E0NCIvPgo8L3N2Zz4="
+                            quality={70}
+                            sizes="(max-width: 640px) 120px, (max-width: 768px) 140px, (max-width: 1024px) 160px, 180px"
+                            // loading="lazy"
+                            // placeholder="blur"
+                            // blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgZmlsbD0iIzNBM0E0NCIvPgo8L3N2Zz4="
                             className="object-cover"
                           />
                         ) : (
@@ -661,9 +667,11 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                                   src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
                                   alt={actor.name}
                                   fill
-                                  loading="lazy"
-                                  placeholder="blur"
-                                  blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
+                                  quality={65}
+                                  sizes="(max-width: 640px) 64px, 80px"
+                                  // loading="lazy"
+                                  // placeholder="blur"
+                                  // blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
                                   className="object-cover"
                                 />
                               ) : (
@@ -704,9 +712,11 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                               src={`https://image.tmdb.org/t/p/w185${getDirectorOrCreator()!.profile_path}`}
                               alt={getDirectorOrCreator()!.name}
                               fill
-                              loading="lazy"
-                              placeholder="blur"
-                              blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
+                              quality={65}
+                              sizes="48px"
+                              // loading="lazy"
+                              // placeholder="blur"
+                              // blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
                               className="object-cover"
                             />
                           ) : (

@@ -765,7 +765,11 @@ export function ContentSection({
                   animationFillMode: 'both' 
                 } : {}}
               >
-                <MediaCard item={item} />
+                <MediaCard 
+                  item={item} 
+                  priority={index < 6} 
+                  loading={index < 6 ? "eager" : "lazy"} 
+                />
               </div>
             )
           })}

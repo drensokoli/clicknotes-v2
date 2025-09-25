@@ -25,8 +25,8 @@ const Footer: React.FC = () => {
         </Link>
       </div>
       <div className="text-muted-foreground *:[a]:hover:text-primary text-center text-xs text-balance *:[a]:underline *:[a]:underline-offset-4">
-        <Link href="/terms-and-conditions.html" target="_blank" aria-label='Terms and Conditions'>Terms of Service</Link>{" "}
-        and <Link href="/privacy-policy.html" target="_blank" aria-label='Privacy Policy'>Privacy Policy</Link>
+        <Link href="https://www.clicknotes.site/terms-and-conditions.html" target="_blank" rel="noopener noreferrer" aria-label='Terms and Conditions'>Terms of Service</Link>{" "}
+        and <Link href="https://www.clicknotes.site/privacy-policy.html" target="_blank" rel="noopener noreferrer" aria-label='Privacy Policy'>Privacy Policy</Link>
       </div>
     </footer>
   );
