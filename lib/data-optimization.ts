@@ -117,10 +117,105 @@ export interface OptimizedBook {
   type: "book";
 }
 
+// Minimal raw shapes for inputs used by optimizers
+interface RawCreditPerson {
+  id: number;
+  name: string;
+  job?: string;
+  character?: string;
+  profile_path: string | null;
+}
+
+interface RawVideoItem {
+  key: string;
+  name: string;
+  site: string;
+  type: string;
+  official: boolean;
+}
+
+interface RawMovieDetails {
+  runtime: number;
+  genres?: Array<{ id: number; name: string }>;
+  credits?: {
+    cast?: RawCreditPerson[];
+    crew?: RawCreditPerson[];
+  };
+  videos?: {
+    results?: RawVideoItem[];
+  };
+}
+
+interface RawMovie {
+  id: number;
+  title: string;
+  overview: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  release_date: string;
+  vote_average: number;
+  vote_count?: number;
+  details?: RawMovieDetails;
+  omdbData?: OptimizedMovie["omdbData"] | null;
+  stremioLink?: string | null;
+}
+
+interface RawTVDetails {
+  genres?: Array<{ id: number; name: string }>;
+  number_of_seasons: number;
+  number_of_episodes: number;
+  status: string;
+  tagline: string;
+  type: string;
+  credits?: {
+    cast?: RawCreditPerson[];
+    crew?: RawCreditPerson[];
+  };
+  videos?: {
+    results?: RawVideoItem[];
+  };
+}
+
+interface RawTVShow {
+  id: number;
+  name: string;
+  overview: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  first_air_date: string;
+  vote_average: number;
+  vote_count?: number;
+  details?: RawTVDetails;
+  omdbData?: OptimizedTVShow["omdbData"] | null;
+  stremioLink?: string | null;
+}
+
+interface RawBookVolumeInfo {
+  title: string;
+  authors?: string[];
+  description?: string;
+  publishedDate?: string;
+  pageCount?: number;
+  averageRating?: number;
+  imageLinks?: {
+    thumbnail?: string | null;
+  };
+  previewLink?: string;
+  infoLink?: string;
+  language?: string;
+  publisher?: string;
+  categories?: string[];
+}
+
+interface RawBook {
+  id: string;
+  volumeInfo?: RawBookVolumeInfo;
+}
+
 /**
  * Optimize movie data by removing redundant and unnecessary fields
  */
-export function optimizeMovieData(movie: any): OptimizedMovie {
+export function optimizeMovieData(movie: RawMovie): OptimizedMovie {
   const optimized: OptimizedMovie = {
     id: movie.id,
     title: movie.title,
@@ -129,7 +224,7 @@ export function optimizeMovieData(movie: any): OptimizedMovie {
     backdrop_path: movie.backdrop_path,
     release_date: movie.release_date,
     vote_average: movie.vote_average,
-    vote_count: movie.vote_count,
+    vote_count: movie.vote_count ?? 0,
     type: "movie"
   };
 
@@ -151,22 +246,22 @@ export function optimizeMovieData(movie: any): OptimizedMovie {
     if (movie.details.credits?.cast) {
       optimized.details.credits.cast = movie.details.credits.cast
         .slice(0, 10)
-        .map((actor: any) => ({
+        .map((actor: RawCreditPerson) => ({
           id: actor.id,
           name: actor.name,
-          character: actor.character,
+          character: actor.character ?? "",
           profile_path: actor.profile_path
         }));
     }
 
     // Keep only the main director from crew
     if (movie.details.credits?.crew) {
-      const director = movie.details.credits.crew.find((member: any) => member.job === "Director");
+      const director = movie.details.credits.crew.find((member: RawCreditPerson) => member.job === "Director");
       if (director) {
         optimized.details.credits.crew = [{
           id: director.id,
           name: director.name,
-          job: director.job,
+          job: director.job ?? "Director",
           profile_path: director.profile_path
         }];
       }
@@ -174,7 +269,7 @@ export function optimizeMovieData(movie: any): OptimizedMovie {
 
     // Keep only the trailer from videos
     if (movie.details.videos?.results) {
-      const trailer = movie.details.videos.results.find((video: any) => 
+      const trailer = movie.details.videos.results.find((video: RawVideoItem) => 
         video.type === "Trailer" && video.site === "YouTube"
       );
       if (trailer) {
@@ -205,7 +300,7 @@ export function optimizeMovieData(movie: any): OptimizedMovie {
 /**
  * Optimize TV show data by removing redundant and unnecessary fields
  */
-export function optimizeTVShowData(tvShow: any): OptimizedTVShow {
+export function optimizeTVShowData(tvShow: RawTVShow): OptimizedTVShow {
   const optimized: OptimizedTVShow = {
     id: tvShow.id,
     name: tvShow.name,
@@ -214,7 +309,7 @@ export function optimizeTVShowData(tvShow: any): OptimizedTVShow {
     backdrop_path: tvShow.backdrop_path,
     first_air_date: tvShow.first_air_date,
     vote_average: tvShow.vote_average,
-    vote_count: tvShow.vote_count,
+    vote_count: tvShow.vote_count ?? 0,
     type: "tvshow"
   };
 
@@ -240,22 +335,22 @@ export function optimizeTVShowData(tvShow: any): OptimizedTVShow {
     if (tvShow.details.credits?.cast) {
       optimized.details.credits.cast = tvShow.details.credits.cast
         .slice(0, 10)
-        .map((actor: any) => ({
+        .map((actor: RawCreditPerson) => ({
           id: actor.id,
           name: actor.name,
-          character: actor.character,
+          character: actor.character ?? "",
           profile_path: actor.profile_path
         }));
     }
 
     // Keep only the main director from crew
     if (tvShow.details.credits?.crew) {
-      const director = tvShow.details.credits.crew.find((member: any) => member.job === "Director");
+      const director = tvShow.details.credits.crew.find((member: RawCreditPerson) => member.job === "Director");
       if (director) {
         optimized.details.credits.crew = [{
           id: director.id,
           name: director.name,
-          job: director.job,
+          job: director.job ?? "Director",
           profile_path: director.profile_path
         }];
       }
@@ -263,7 +358,7 @@ export function optimizeTVShowData(tvShow: any): OptimizedTVShow {
 
     // Keep only the trailer from videos
     if (tvShow.details.videos?.results) {
-      const trailer = tvShow.details.videos.results.find((video: any) => 
+      const trailer = tvShow.details.videos.results.find((video: RawVideoItem) => 
         video.type === "Trailer" && video.site === "YouTube"
       );
       if (trailer) {
@@ -294,12 +389,12 @@ export function optimizeTVShowData(tvShow: any): OptimizedTVShow {
 /**
  * Optimize book data by removing unnecessary fields
  */
-export function optimizeBookData(book: any): OptimizedBook {
+export function optimizeBookData(book: RawBook): OptimizedBook {
   const optimized: OptimizedBook = {
     id: book.id,
     type: "book",
     volumeInfo: {
-      title: book.volumeInfo?.title,
+      title: book.volumeInfo?.title ?? "",
       authors: book.volumeInfo?.authors,
       description: book.volumeInfo?.description,
       publishedDate: book.volumeInfo?.publishedDate,
@@ -326,7 +421,7 @@ export function optimizeBookData(book: any): OptimizedBook {
 /**
  * Calculate the size reduction percentage
  */
-export function calculateSizeReduction(original: any, optimized: any): number {
+export function calculateSizeReduction(original: unknown, optimized: unknown): number {
   const originalSize = JSON.stringify(original).length;
   const optimizedSize = JSON.stringify(optimized).length;
   const reduction = ((originalSize - optimizedSize) / originalSize) * 100;
@@ -336,7 +431,7 @@ export function calculateSizeReduction(original: any, optimized: any): number {
 /**
  * Log optimization results
  */
-export function logOptimization(type: string, original: any, optimized: any) {
+export function logOptimization(type: string, original: unknown, optimized: unknown) {
   const reduction = calculateSizeReduction(original, optimized);
   const originalSize = JSON.stringify(original).length;
   const optimizedSize = JSON.stringify(optimized).length;

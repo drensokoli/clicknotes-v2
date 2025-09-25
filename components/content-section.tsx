@@ -67,13 +67,6 @@ export function ContentSection({
   // Use external state if provided, otherwise use internal state
   const [internalActiveSection, setInternalActiveSection] = useState<Section>("movies")
   const activeSection = externalActiveSection ?? internalActiveSection
-  const setActiveSection = useCallback((section: Section) => {
-    if (externalActiveSection !== undefined) {
-      // If external state is provided, don't update internal state
-      return
-    }
-    setInternalActiveSection(section)
-  }, [externalActiveSection])
 
   const [isInitialized, setIsInitialized] = useState(false)
 
