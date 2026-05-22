@@ -552,7 +552,7 @@ export function ContentSection({
                 </svg>
                 <input
                   type="text"
-                  placeholder="Search..."
+                  placeholder={`Search ${activeSection === "tvshows" ? "TV shows" : activeSection}...`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => {
@@ -612,7 +612,7 @@ export function ContentSection({
               </svg>
               <input
                 type="text"
-                placeholder="Search..."
+                placeholder={`Search ${activeSection === "tvshows" ? "TV shows" : activeSection}...`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
