@@ -9,6 +9,8 @@ import { Analytics } from "@vercel/analytics/next"
 import Footer from "@/components/footer"
 import { PWAInstallToast } from "@/components/pwa-install-toast"
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: "ClickNotes v2",
   description: "Save and organize your favorite movies, TV shows, and books",
