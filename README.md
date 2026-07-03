@@ -15,20 +15,19 @@ A Next.js application for saving and organizing movies, TV shows, and books. Bui
 
 ### Data Structure
 
-The application uses Redis for data storage of initial page data—popular movies, TV shows, and NY Times bestsellers—using a paginated key structure:
+The application uses Redis for data storage of popular movies, TV shows, and NY Times bestsellers. Each media type is stored as a single JSON array under one key, holding minimal "card" fields (title, poster, rating, etc.) - detail pages fetch full TMDB/OMDB data live on demand.
 
-- **Movies**: 6 keys of 40 items each (240 total)
-  - `movies1`, `movies2`, `movies3`, `movies4`, `movies5`, `movies6`
-- **TV Shows**: 6 keys of 40 items each (240 total)
-  - `tvshows1`, `tvshows2`, `tvshows3`, `tvshows4`, `tvshows5`, `tvshows6`
-- **Books**: 4 keys of 40 items each (160 total)
-  - `books1`, `books2`, `books3`, `books4`
+- `movies_v2` - up to 240 movie cards
+- `tvshows_v2` - up to 240 TV show cards
+- `books_v2` - book cards in multiples of 40
+
+Cards are read via range queries (`GET /api/redisHandler?type=v2-range&mediaType=...&start=...&end=...`), 20 at a time.
 
 ### Caching System
 
-- **Server-Side Cache**: In-memory cache for Redis data (7-day duration)
+- **Next.js Data Cache**: Server component fetches are cached for 7 days via `next: { revalidate }`
 - **Progressive Loading**: Initial load shows first 20 items, loads more on scroll
-- **Fallback System**: API fallback if Redis is unavailable
+- **Fallback System**: Live API fallback (TMDB/Google Books/NY Times) if Redis has no data yet
 
 ## Getting Started
 
@@ -48,14 +47,16 @@ Create a `.env.local` file with:
 
 ```bash
 # Redis
-REDIS_URL=your_redis_url
-REDIS_URL_2=your_backup_redis_url
+REDIS_HOST=your_redis_host
+REDIS_PORT=your_redis_port
+REDIS_PASSWORD=your_redis_password
 
 # API Keys
 TMDB_API_KEY=your_tmdb_key
-GOOGLE_BOOKS_API_KEY=your_google_books_key
-NY_TIMES_API_KEY=your_ny_times_key
-OMDB_API_KEY=your_omdb_key
+GOOGLE_BOOKS_API_KEY_1=your_google_books_key
+GOOGLE_BOOKS_API_KEY_2=your_google_books_key
+NYTIMES_API_KEY=your_ny_times_key
+OMDB_API_KEY_1=your_omdb_key
 
 # Email Notifications (for error alerts)
 RESEND_API_KEY=your_resend_api_key
@@ -89,15 +90,18 @@ Body: { "action": "populate-all" }
 ```
 
 This will:
-- Fetch popular movies and TV shows from TMDB (sequentially to avoid rate limiting)
+- Fetch popular movies and TV shows from TMDB (movies and books in parallel, TV shows after to avoid rate limiting)
 - Fetch bestseller books from NY Times and enrich with Google Books API
-- Store data in both primary and backup Redis databases
-- Create paginated keys for efficient loading
+- Store minimal card data in Redis (`movies_v2`, `tvshows_v2`, `books_v2`)
 - Send email notifications if any errors occur during Redis uploads
+
+This also runs automatically once a week (Mondays at 13:00 UTC) via the Vercel cron job configured in `vercel.json` (`GET /api/cron`).
+
+Since the app uses a single free-tier Redis instance with limited monthly bandwidth, each media type is only refetched and rewritten if its data is more than a week old - population is a no-op otherwise. Pass `{ "force": true }` in the POST body (or `node scripts/populate-redis.js all --force`) to bypass this and repopulate immediately.
 
 ## API Endpoints
 
-- `GET /api/redisHandler?type={mediaType}{keyNumber}` - Fetch paginated media data
+- `GET /api/redisHandler?type=v2-range&mediaType={movies|tvshows|books}&start={n}&end={n}` - Fetch a range of media cards
 - `POST /api/cron` - Populate Redis with fresh data
   - `{ "action": "populate-all" }` - Populate all media types
   - `{ "action": "populate-movies" }` - Populate movies only
@@ -111,7 +115,7 @@ The system includes comprehensive error handling with email notifications:
 
 - **Redis Upload Failures**: Automatic email alerts to administrators
 - **API Rate Limiting**: Smart sequencing to avoid TMDB conflicts
-- **Fallback Systems**: Backup Redis and API fallbacks for reliability
+- **Fallback Systems**: Live API fallback for reliability if Redis is empty or unreachable
 - **Detailed Logging**: Comprehensive logging for debugging
 
 ### Email Notifications
@@ -171,20 +175,20 @@ If Redis population fails, you can manually retry using the retry page:
 
 ### Data Flow
 
-1. Server fetches initial data from Redis (first key of each media type)
-2. Data is cached in server-side memory for 7 days
-3. Client receives initial 20 items
-4. On scroll, client fetches next Redis key
-5. Progressive loading continues until all keys are exhausted
+1. Server fetches the first 20 cards of each media type from Redis (`v2-range`)
+2. The fetch response is cached by Next.js's data cache for 7 days
+3. Client receives the initial 20 items
+4. On scroll, client fetches the next range of cards from Redis
+5. Progressive loading continues until Redis has no more cards to return
 
 ## Performance Features
 
-- **Server-Side Caching**: Prevents repeated Redis calls on page reloads
+- **Next.js Data Caching**: Prevents repeated Redis calls on page reloads
 - **Progressive Loading**: Loads data in chunks to improve initial page load
-- **Redis Failover**: Automatic fallback to backup Redis if primary fails
+- **Live API Fallback**: Falls back to TMDB/Google Books/NY Times directly if Redis is empty
 - **Optimized Images**: Next.js Image optimization for media posters
 - **Efficient State Management**: Minimal re-renders and optimized updates
-- **Smart API Sequencing**: Avoids rate limiting by running movies and TV shows sequentially
+- **Smart API Sequencing**: Avoids rate limiting by running movies/books and TV shows sequentially
 
 ## Deployment
 

@@ -10,9 +10,8 @@ export function middleware(request: NextRequest) {
   // For API routes, set appropriate cache headers to avoid no-store
   if (pathname.startsWith('/api/')) {
     // Auth routes should not be cached for security
-    if (pathname.startsWith('/api/auth/') || 
-        pathname.startsWith('/api/cron') || 
-        pathname.startsWith('/api/populate')) {
+    if (pathname.startsWith('/api/auth/') ||
+        pathname.startsWith('/api/cron')) {
       response.headers.set('Cache-Control', 'private, max-age=0, must-revalidate')
     } 
     // Data routes can be cached briefly
