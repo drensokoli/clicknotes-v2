@@ -139,51 +139,26 @@ export function ContentSection({
     const startIndex = currentDataCount;
     const endIndex = startIndex + 19; // Prefetch next 20 items
 
-    console.log(`🔄 Background prefetch: ${mediaType} IDs from ranking range: ${startIndex}-${endIndex}`);
+    console.log(`🔄 Background prefetch: ${mediaType} v2 cards range: ${startIndex}-${endIndex}`);
 
     // Set prefetching flag
     setIsPrefetching(prev => ({ ...prev, [mediaType]: true }));
 
     try {
-      // Step 1: Get the next batch of IDs from the ranking
-      const rankingResponse = await fetch(`/api/redisHandler?type=ranking-range&mediaType=${mediaType}&start=${startIndex}&end=${endIndex}`);
+      const cardsResponse = await fetch(
+        `/api/redisHandler?type=v2-range&mediaType=${mediaType}&start=${startIndex}&end=${endIndex}`
+      );
 
-      if (!rankingResponse.ok) {
-        console.error(`❌ Prefetch failed to fetch ranking range for ${mediaType}`);
+      if (!cardsResponse.ok) {
+        console.error(`❌ Prefetch failed to fetch v2-range cards for ${mediaType}`);
         return;
       }
 
-      const rankingData = await rankingResponse.json();
+      const cardsData = await cardsResponse.json();
 
-      if (!rankingData.success || !rankingData.ids || rankingData.ids.length === 0) {
-        console.log(`✅ No more ${mediaType} items available for prefetch`);
-        setCurrentRankingPosition(prev => ({
-          ...prev,
-          [mediaType]: 999
-        }));
-        return;
-      }
-
-      const ids = rankingData.ids;
-
-      // Step 2: Fetch the actual items by IDs
-      const idsString = ids.join(',');
-      const singularMediaType = mediaType === 'movies' ? 'movie' :
-                               mediaType === 'tvshows' ? 'tvshow' :
-                               mediaType === 'books' ? 'book' : mediaType;
-
-      const itemsResponse = await fetch(`/api/redisHandler?type=fetch-by-ids&mediaType=${singularMediaType}&ids=${idsString}`);
-
-      if (!itemsResponse.ok) {
-        console.error(`❌ Prefetch failed to fetch ${mediaType} items by IDs`);
-        return;
-      }
-
-      const itemsData = await itemsResponse.json();
-
-      if (itemsData.success && itemsData.items && itemsData.items.length > 0) {
-        const newItems = itemsData.items;
-        console.log(`✅ Prefetch successful: ${newItems.length} new ${mediaType} items loaded in background`);
+      if (cardsData.success && Array.isArray(cardsData.items) && cardsData.items.length > 0) {
+        const newItems = cardsData.items;
+        console.log(`✅ Prefetch successful: ${newItems.length} new ${mediaType} v2 cards loaded in background`);
 
         // Update data state (but don't update display count)
         setAllMediaData(prev => ({
@@ -196,9 +171,8 @@ export function ContentSection({
           ...prev,
           [mediaType]: endIndex + 1
         }));
-
       } else {
-        console.log(`⚠️ Prefetch: No ${mediaType} items found for requested IDs`);
+        console.log(`✅ No more ${mediaType} items available for prefetch`);
         setCurrentRankingPosition(prev => ({
           ...prev,
           [mediaType]: 999
@@ -229,49 +203,21 @@ export function ContentSection({
     setIsLoadingNextPage(true);
 
     try {
-      // Step 1: Get the next batch of IDs from the ranking
-      console.log(`📊 Fetching ${mediaType} IDs from ranking range: ${startIndex}-${endIndex}`);
-      const rankingResponse = await fetch(`/api/redisHandler?type=ranking-range&mediaType=${mediaType}&start=${startIndex}&end=${endIndex}`);
+      console.log(`📦 Fetching ${mediaType} v2 cards range: ${startIndex}-${endIndex}`);
+      const cardsResponse = await fetch(
+        `/api/redisHandler?type=v2-range&mediaType=${mediaType}&start=${startIndex}&end=${endIndex}`
+      );
 
-      if (!rankingResponse.ok) {
-        console.error(`❌ Failed to fetch ranking range for ${mediaType}`);
+      if (!cardsResponse.ok) {
+        console.error(`❌ Failed to fetch v2-range cards for ${mediaType}`);
         return;
       }
 
-      const rankingData = await rankingResponse.json();
+      const cardsData = await cardsResponse.json();
 
-      if (!rankingData.success || !rankingData.ids || rankingData.ids.length === 0) {
-        console.log(`✅ No more ${mediaType} items available in ranking (fetched ${currentDataCount} total)`);
-        // Mark as end by setting a high number
-        setCurrentRankingPosition(prev => ({
-          ...prev,
-          [mediaType]: 999 // High number to indicate end reached
-        }));
-        return;
-      }
-
-      const ids = rankingData.ids;
-      console.log(`📊 Got ${ids.length} ${mediaType} IDs from ranking`);
-
-      // Step 2: Fetch the actual items by IDs
-      const idsString = ids.join(',');
-      // Convert plural to singular for Redis key format
-      const singularMediaType = mediaType === 'movies' ? 'movie' :
-                               mediaType === 'tvshows' ? 'tvshow' :
-                               mediaType === 'books' ? 'book' : mediaType;
-      console.log(`🎬 Fetching ${ids.length} ${mediaType} items by IDs`);
-      const itemsResponse = await fetch(`/api/redisHandler?type=fetch-by-ids&mediaType=${singularMediaType}&ids=${idsString}`);
-
-      if (!itemsResponse.ok) {
-        console.error(`❌ Failed to fetch ${mediaType} items by IDs`);
-        return;
-      }
-
-      const itemsData = await itemsResponse.json();
-
-      if (itemsData.success && itemsData.items && itemsData.items.length > 0) {
-        const newItems = itemsData.items;
-        console.log(`✅ Successfully fetched ${newItems.length} new ${mediaType} items`);
+      if (cardsData.success && Array.isArray(cardsData.items) && cardsData.items.length > 0) {
+        const newItems = cardsData.items;
+        console.log(`✅ Successfully fetched ${newItems.length} new ${mediaType} v2 cards`);
 
         // Update all states in the correct order
         setAllMediaData(prev => {
@@ -301,7 +247,7 @@ export function ContentSection({
         });
 
       } else {
-        console.log(`⚠️ No ${mediaType} items found for the requested IDs`);
+        console.log(`✅ No more ${mediaType} items available in v2 cards`);
         // Mark as end
         setCurrentRankingPosition(prev => ({
           ...prev,
