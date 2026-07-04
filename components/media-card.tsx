@@ -190,17 +190,12 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
     setMounted(true)
   }, [])
 
-  // Hide the buttons when tapping/clicking outside the card while they're shown
-  useEffect(() => {
-    if (!showButtons) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (cardRef.current && !cardRef.current.contains(event.target as Node)) {
-        setShowButtons(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showButtons])
+  // Note: deliberately no "click outside to hide" listener here. A raw DOM `mousedown`
+  // listener (a separate event system from React's synthetic `click`) fires *before* the
+  // button's own click, so if it ever misfired it could flip pointer-events to `none` on
+  // the button container before the button's click actually dispatched - the exact kind
+  // of race that made buttons need an extra tap. Toggling only happens by tapping the
+  // poster (which the buttons stopPropagation to avoid re-triggering).
 
   // Safety check: ensure item has required properties
   if (!item || !item.type) {
