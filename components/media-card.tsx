@@ -431,9 +431,13 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
           </div>
         </div>
 
-        {/* Title - revealed on desktop hover, or on mobile once tapped */}
+        {/* Title - revealed on desktop hover, or on mobile once tapped. pointer-events-none
+            because this renders after (so visually on top of) the action buttons, and the
+            vertically-centered button stack can overlap this bottom bar on narrow cards -
+            without this, a tap meant for a button would land on this label instead and
+            swallow the click, since this div has no click handler of its own to pass it on. */}
         <div className={cn(
-          "absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent transition-opacity duration-300 ease-out",
+          "absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent transition-opacity duration-300 ease-out pointer-events-none",
           "opacity-0 group-hover:opacity-100",
           showButtons && "opacity-100",
         )}>
@@ -442,8 +446,10 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
           </h3>
         </div>
 
-        {/* Rating Badge - Always visible for all media types */}
-        <div className="absolute top-3 right-3 flex items-center gap-1.5 rounded-full bg-black/80 backdrop-blur-sm px-3 py-1.5 text-xs font-medium text-white shadow-lg z-10">
+        {/* Rating Badge - Always visible for all media types. pointer-events-none for the
+            same reason as the title bar above - purely decorative, shouldn't ever be able
+            to swallow a tap meant for a button underneath it. */}
+        <div className="absolute top-3 right-3 flex items-center gap-1.5 rounded-full bg-black/80 backdrop-blur-sm px-3 py-1.5 text-xs font-medium text-white shadow-lg z-10 pointer-events-none">
           <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
           <span>{getRating() > 0 ? getRating().toFixed(1) : 'N/A'}</span>
         </div>
