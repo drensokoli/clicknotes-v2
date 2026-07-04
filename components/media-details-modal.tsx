@@ -4,6 +4,7 @@ import { X, Star, Calendar, ExternalLink, Play, Eye, Bookmark, User, MonitorPlay
 import { getOmdbData } from "@/lib/omdb-helpers"
 import Image from "next/image"
 import { useModal } from "./modal-provider"
+import { useSavedMedia } from "./saved-media-provider"
 import { useEffect, useState } from "react"
 import { fetchMovieDetails, fetchTVDetails, getGenreNames, getYouTubeTrailer, type MovieDetails, type TVDetails } from "@/lib/tmdb-details"
 import { motion, AnimatePresence } from "framer-motion"
@@ -14,6 +15,7 @@ interface MediaDetailsModalProps {
 
 export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
   const { isModalOpen, modalContent: item, closeModal, tmdbApiKey } = useModal()
+  const { getStatus, toggle } = useSavedMedia()
   const [detailedData, setDetailedData] = useState<MovieDetails | TVDetails | null>(null)
   const [omdbData, setOmdbData] = useState<{ imdbId: string } | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -189,6 +191,9 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
   }, [isModalOpen, closeModal])
 
   if (!isModalOpen || !item) return null
+
+  // Current saved state for this item ("to_watch" | "watched" | null)
+  const savedStatus = getStatus(item.type, item.id)
 
   const getTitle = () => {
     if ('title' in item && item.title) return item.title
@@ -475,26 +480,44 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
 
                 {/* Save Button */}
                 <motion.button
-                  className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-800 transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
+                  onClick={() => toggle(item.type, item.id, "to_watch", item)}
+                  className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer ${
+                    savedStatus === "to_watch"
+                      ? "bg-blue-800 text-white ring-2 ring-blue-300"
+                      : "bg-primary text-white hover:bg-blue-800"
+                  }`}
                   variants={buttonVariants}
                   custom={3}
                   whileHover="hover"
                   whileTap="tap"
                 >
-                  <Bookmark className="w-4 h-4" />
-                  <span className="hidden sm:inline">Save</span>
+                  <Bookmark className={`w-4 h-4 ${savedStatus === "to_watch" ? "fill-current" : ""}`} />
+                  <span className="hidden sm:inline">
+                    {savedStatus === "to_watch"
+                      ? (item.type === 'book' ? 'Saved to Read' : 'Saved to Watch')
+                      : 'Save'}
+                  </span>
                 </motion.button>
 
                 {/* Watched/Read Button */}
                 <motion.button
-                  className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
+                  onClick={() => toggle(item.type, item.id, "watched", item)}
+                  className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer ${
+                    savedStatus === "watched"
+                      ? "bg-green-700 text-white ring-2 ring-green-300"
+                      : "bg-green-600 hover:bg-green-700 text-white"
+                  }`}
                   variants={buttonVariants}
                   custom={4}
                   whileHover="hover"
                   whileTap="tap"
                 >
-                  <Eye className="w-4 h-4" />
-                  <span className="hidden sm:inline">{item.type === 'book' ? 'Mark Read' : 'Mark Watched'}</span>
+                  <Eye className={`w-4 h-4 ${savedStatus === "watched" ? "fill-current" : ""}`} />
+                  <span className="hidden sm:inline">
+                    {savedStatus === "watched"
+                      ? (item.type === 'book' ? 'Read' : 'Watched')
+                      : (item.type === 'book' ? 'Mark Read' : 'Mark Watched')}
+                  </span>
                 </motion.button>
 
                 {/* Watch on Stremio - Only for movies/TV with IMDB ID */}

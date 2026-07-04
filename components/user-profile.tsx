@@ -137,16 +137,14 @@ export function UserProfile() {
             Profile
           </button>
 
-          <button
-            onClick={() => {
-              setIsDropdownOpen(false)
-              // Add library navigation here
-            }}
-            className="flex  items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
+          <Link
+            href="/saved"
+            onClick={() => setIsDropdownOpen(false)}
+            className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
           >
             <Library className="w-4 h-4 mr-3" />
-            Library
-          </button>
+            My List
+          </Link>
 
           <button
             onClick={cycleTheme}

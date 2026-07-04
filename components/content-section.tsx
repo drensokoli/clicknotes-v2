@@ -105,12 +105,13 @@ export function ContentSection({
 
   const [isSearching, setIsSearching] = useState(false)
   const [displayCounts, setDisplayCounts] = useState({
-    movies: 20,
-    tvshows: 20,
-    books: 20
+    movies: 40,
+    tvshows: 40,
+    books: 40
   })
 
-  // Note: We start with 40 items in cache but only display 20 initially
+  // We start with 40 items server-fetched and displayed initially; subsequent
+  // scroll-triggered batches load 20 more at a time.
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingNextPage, setIsLoadingNextPage] = useState(false)
   const [isPrefetching, setIsPrefetching] = useState<{[key in Section]: boolean}>({
@@ -695,12 +696,12 @@ export function ContentSection({
         })()
           .map((item, index) => {
             // Calculate animation delay based on position in current page, not total index
-            // Only animate the first 20 items initially, and new items when loaded
+            // Only animate the initial 40 items, and new items when loaded (20 at a time after that)
             const currentDisplayCount = displayCounts[activeSection];
-            const previousDisplayCount = currentDisplayCount - 20;
+            const previousDisplayCount = currentDisplayCount <= 40 ? 0 : currentDisplayCount - 20;
             const isNewlyLoaded = index >= previousDisplayCount;
             const animationIndex = isNewlyLoaded ? (index - previousDisplayCount) : index;
-            const shouldAnimate = index < 20 || isNewlyLoaded;
+            const shouldAnimate = index < 40 || isNewlyLoaded;
             
             return (
               <div

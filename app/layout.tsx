@@ -3,13 +3,12 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
 import { ModalProvider } from "@/components/modal-provider";
+import { SavedMediaProvider } from "@/components/saved-media-provider";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Analytics } from "@vercel/analytics/next"
 import Footer from "@/components/footer"
 import { PWAInstallToast } from "@/components/pwa-install-toast"
-
-export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: "ClickNotes v2",
@@ -66,10 +65,12 @@ export default async function RootLayout({
             enableSystem={false}
             disableTransitionOnChange={true}
           >
-            <ModalProvider>
-              {children}
-              <Analytics />
-            </ModalProvider>
+            <SavedMediaProvider>
+              <ModalProvider>
+                {children}
+                <Analytics />
+              </ModalProvider>
+            </SavedMediaProvider>
             <Footer />
             <PWAInstallToast />
           </ThemeProvider>

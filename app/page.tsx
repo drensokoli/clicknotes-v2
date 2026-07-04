@@ -26,12 +26,12 @@ export const metadata: Metadata = {
   }
 }
 
-// Fetch the first 20 v2 cards for a media type directly from Redis.
+// Fetch the first 40 v2 cards for a media type directly from Redis.
 // Redis stores only minimal card fields; the modal fetches full details on demand.
 async function fetchInitialCards(baseUrl: string, mediaType: string) {
   try {
     const response = await fetch(
-      `${baseUrl}/api/redisHandler?type=v2-range&mediaType=${mediaType}&start=0&end=19`,
+      `${baseUrl}/api/redisHandler?type=v2-range&mediaType=${mediaType}&start=0&end=39`,
       // Cache for 7 days, but tagged so /api/cron can bust this the moment it writes fresh
       // data to Redis - otherwise a stale (or empty) response gets stuck for the full week.
       { next: { revalidate: 60 * 60 * 24 * 7, tags: [`v2-cards-${mediaType}`] } }

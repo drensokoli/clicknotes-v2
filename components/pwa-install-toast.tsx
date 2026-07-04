@@ -24,6 +24,34 @@ declare global {
   }
 }
 
+// Some browsers (strict tracking-protection modes, "block all cookies" settings,
+// sandboxed/embedded contexts) throw a SecurityError just from touching
+// localStorage, not just from a failed read. Guard every access so a privacy
+// setting can't crash the whole page.
+const safeLocalStorage = {
+  get(key: string): string | null {
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  },
+  set(key: string, value: string): void {
+    try {
+      localStorage.setItem(key, value)
+    } catch {
+      // Ignore - storage unavailable, PWA install prompt just won't persist dismissal state.
+    }
+  },
+  remove(key: string): void {
+    try {
+      localStorage.removeItem(key)
+    } catch {
+      // Ignore - storage unavailable.
+    }
+  },
+}
+
 export function PWAInstallToast() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [showToast, setShowToast] = useState(false)
@@ -37,21 +65,21 @@ export function PWAInstallToast() {
     if (isStandalone) return
 
     // Check if user has dismissed the toast recently (within 2 weeks)
-    const dismissedTimestamp = localStorage.getItem('pwa-toast-dismissed-timestamp')
+    const dismissedTimestamp = safeLocalStorage.get('pwa-toast-dismissed-timestamp')
     if (dismissedTimestamp) {
       const twoWeeksAgo = Date.now() - (14 * 24 * 60 * 60 * 1000) // 2 weeks in milliseconds
       if (parseInt(dismissedTimestamp) > twoWeeksAgo) {
         return // Don't show toast if dismissed within 2 weeks
       } else {
         // Clear old dismissal if it's been more than 2 weeks
-        localStorage.removeItem('pwa-toast-dismissed-timestamp')
+        safeLocalStorage.remove('pwa-toast-dismissed-timestamp')
         // Also clear any old dismissal flags that might exist
-        localStorage.removeItem('pwa-toast-dismissed')
+        safeLocalStorage.remove('pwa-toast-dismissed')
       }
     }
 
     // Check if this is not the user's first visit
-    const hasVisitedBefore = localStorage.getItem('pwa-first-visit')
+    const hasVisitedBefore = safeLocalStorage.get('pwa-first-visit')
     if (hasVisitedBefore) return
 
     // Detect iOS devices (including iPadOS)
@@ -71,7 +99,7 @@ export function PWAInstallToast() {
     // Show toast after 3 seconds for both iOS and non-iOS users
     const timer = setTimeout(() => {
       // Mark that user has visited before (prevents showing on subsequent visits)
-      localStorage.setItem('pwa-first-visit', 'true')
+      safeLocalStorage.set('pwa-first-visit', 'true')
 
       // For iOS, show toast to guide users through manual installation
       if (isIOSDevice) {
@@ -106,7 +134,7 @@ export function PWAInstallToast() {
       setShowToast(false)
 
       // Mark that user has visited before (prevents showing on subsequent visits)
-      localStorage.setItem('pwa-first-visit', 'true')
+      safeLocalStorage.set('pwa-first-visit', 'true')
     } catch (error) {
       console.error('Install prompt failed:', error)
     }
@@ -120,7 +148,7 @@ export function PWAInstallToast() {
   const dismissToast = () => {
     setShowToast(false)
     // Store dismissal timestamp for 2-week cooldown
-    localStorage.setItem('pwa-toast-dismissed-timestamp', Date.now().toString())
+    safeLocalStorage.set('pwa-toast-dismissed-timestamp', Date.now().toString())
   }
 
   if (!showToast && !showIOSModal) return null
@@ -163,8 +191,8 @@ export function PWAInstallToast() {
                 onClick={() => {
                   setShowIOSModal(false)
                   // Mark that user has visited before and store dismissal timestamp
-                  localStorage.setItem('pwa-first-visit', 'true')
-                  localStorage.setItem('pwa-toast-dismissed-timestamp', Date.now().toString())
+                  safeLocalStorage.set('pwa-first-visit', 'true')
+                  safeLocalStorage.set('pwa-toast-dismissed-timestamp', Date.now().toString())
                 }}
                 className="text-[var(--muted)] hover:text-[var(--foreground)] hover:cursor-pointer"
               >
@@ -245,8 +273,8 @@ export function PWAInstallToast() {
               onClick={() => {
                 setShowIOSModal(false)
                 // Mark that user has visited before and store dismissal timestamp
-                localStorage.setItem('pwa-first-visit', 'true')
-                localStorage.setItem('pwa-toast-dismissed-timestamp', Date.now().toString())
+                safeLocalStorage.set('pwa-first-visit', 'true')
+                safeLocalStorage.set('pwa-toast-dismissed-timestamp', Date.now().toString())
               }}
               className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors hover:cursor-pointer"
             >

@@ -2,6 +2,7 @@ import Image from "next/image"
 import { Star } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useModal } from "./modal-provider"
+import { useSavedMedia } from "./saved-media-provider"
 import { useState, useEffect, useRef } from "react"
 import { useTheme } from "next-themes"
 
@@ -173,6 +174,7 @@ interface MediaCardProps {
 
 export function MediaCard({ item, className, priority = false, loading = "lazy" }: MediaCardProps) {
   const { openModal } = useModal()
+  const { getStatus, toggle } = useSavedMedia()
   const { resolvedTheme } = useTheme()
   const [showButtons, setShowButtons] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -267,6 +269,9 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
     return 0;
   };
 
+  // Current saved state for this item ("to_watch" | "watched" | null)
+  const savedStatus = getStatus(item.type, item.id);
+
   return (
     <div
       ref={cardRef}
@@ -324,17 +329,21 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
                 "button-slide-up delay-1 media-card-button",
                 showButtons && "show"
               )}
-              style={{
-                backgroundColor: mounted && resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
-                color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
-              }}
-              title="Save to List"
+              style={
+                savedStatus === "to_watch"
+                  ? { backgroundColor: "rgb(26, 86, 219)", color: "rgb(255, 255, 255)" }
+                  : {
+                      backgroundColor: mounted && resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                      color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
+                    }
+              }
+              title={savedStatus === "to_watch" ? "Remove from list" : (item.type === "book" ? "Save to read" : "Save to watch")}
               onClick={(e) => {
                 e.stopPropagation();
-                // Add save functionality here
+                toggle(item.type, item.id, "to_watch", item);
               }}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill={savedStatus === "to_watch" ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z" />
               </svg>
             </button>
@@ -347,14 +356,18 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
                 "button-slide-up delay-2 media-card-button",
                 showButtons && "show"
               )}
-              style={{
-                backgroundColor: mounted && resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
-                color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
-              }}
-              title="Mark as Watched"
+              style={
+                savedStatus === "watched"
+                  ? { backgroundColor: "rgb(22, 163, 74)", color: "rgb(255, 255, 255)" }
+                  : {
+                      backgroundColor: mounted && resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                      color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
+                    }
+              }
+              title={savedStatus === "watched" ? "Remove from list" : (item.type === "book" ? "Mark as read" : "Mark as watched")}
               onClick={(e) => {
                 e.stopPropagation();
-                // Add watched functionality here
+                toggle(item.type, item.id, "watched", item);
               }}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

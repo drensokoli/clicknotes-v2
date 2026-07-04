@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const runtimeCaching = require("next-pwa/cache");
 
 const nextConfig: NextConfig = {
+  // Dev-only: logs each fetch() with its cache status (HIT/SKIP) in the terminal,
+  // so it's easy to see whether the Redis fetch in app/page.tsx is being reused
+  // from the Data Cache or hitting Redis fresh.
+  logging: { fetches: { fullUrl: true } },
   // Enable source maps in production for better debugging and Lighthouse insights
   productionBrowserSourceMaps: true,
   
