@@ -44,6 +44,7 @@ export interface SavedCard {
     description?: string
     publishedDate?: string
     averageRating?: number
+    categories?: string[]
     imageLinks?: { thumbnail?: string | null }
   }
 }
@@ -127,6 +128,7 @@ export function toSlimCard(mediaType: MediaType, card: SavedCard): SavedCard {
       description: vi.description,
       publishedDate: vi.publishedDate,
       averageRating: vi.averageRating,
+      categories: vi.categories,
       imageLinks: { thumbnail: vi.imageLinks?.thumbnail ?? null },
     },
   }

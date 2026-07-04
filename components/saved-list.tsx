@@ -3,10 +3,12 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
+import { Shuffle as ShuffleIcon } from "lucide-react"
 import { useModal } from "./modal-provider"
 import { useSavedMedia, type MediaType, type SavedStatus } from "./saved-media-provider"
 import { MediaCard, type MediaItem } from "./media-card"
 import { MediaDetailsModal } from "./media-details-modal"
+import { ShuffleModal } from "./shuffle-modal"
 import { UserProfile } from "./user-profile"
 import type { SavedCard } from "@/lib/saved-media"
 
@@ -52,6 +54,7 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
 
   const [activeTab, setActiveTab] = useState<SavedStatus>("to_watch")
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all")
+  const [shuffleOpen, setShuffleOpen] = useState(false)
 
   // Make the detail modal able to fetch full details on card click.
   useEffect(() => {
@@ -97,9 +100,18 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
       </nav>
 
       <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <div className="flex items-baseline justify-between mb-5">
-          <h2 className="text-base font-semibold text-foreground">Your library</h2>
-          <span className="text-xs text-muted-foreground">{totalCount} saved</span>
+        <div className="flex items-center justify-between mb-5 gap-3">
+          <div className="flex items-baseline gap-3">
+            <h2 className="text-base font-semibold text-foreground">Your library</h2>
+            <span className="text-xs text-muted-foreground">{totalCount} saved</span>
+          </div>
+          <button
+            onClick={() => setShuffleOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-elevated text-foreground text-sm font-medium hover:bg-surface-tonal transition-colors hover:cursor-pointer"
+          >
+            <ShuffleIcon className="w-4 h-4" />
+            Shuffle
+          </button>
         </div>
 
         {/* Status tabs */}
@@ -167,6 +179,14 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
       </main>
 
       <MediaDetailsModal omdbApiKeys={omdbApiKeys} />
+
+      {shuffleOpen && (
+        <ShuffleModal
+          items={items}
+          defaultStatus={activeTab}
+          onClose={() => setShuffleOpen(false)}
+        />
+      )}
     </div>
   )
 }

@@ -308,19 +308,35 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
           </div>
         )}
         
-        {/* Gradient Overlay - revealed on desktop hover, or on mobile once tapped */}
+        {/* Gradient Overlay - revealed on desktop hover, or on mobile once tapped.
+            card-reveal-on-hover's opacity is set in globals.css inside an
+            @media (hover: hover) block, NOT via Tailwind's group-hover: utility - see
+            the note on the Action Buttons block below for why. */}
         <div className={cn(
           "absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent transition-opacity duration-300 ease-out",
-          "opacity-0 group-hover:opacity-100",
+          "opacity-0 card-reveal-on-hover",
           showButtons && "opacity-100",
         )} />
 
         {/* Action Buttons - revealed via real :hover on desktop, or via the showButtons
             JS toggle on mobile (see .button-slide-up + .group:hover / .buttons-visible
             rules in globals.css). The Info button is the only way to open the modal now -
-            clicking the poster itself just toggles this reveal. */}
+            clicking the poster itself just toggles this reveal.
+
+            IMPORTANT: pointer-events-auto for the hover path is gated behind
+            @media (hover: hover) in globals.css, not Tailwind's group-hover: utility.
+            Many mobile browsers simulate the :hover pseudo-class on the first tap (a
+            long-documented WebKit/touch quirk) - if group-hover: classes were used here,
+            that phantom hover match could flip pointer-events/opacity inconsistently
+            between rules on the very tap meant to reveal+use a button, which is exactly
+            what caused buttons to render visible but not be clickable until a second
+            tap. Scoping the real-hover CSS inside @media (hover: hover) and (pointer:
+            fine) means it's structurally impossible for it to activate on a touch
+            device's primary input, regardless of any :hover simulation the browser
+            does internally - touch devices report (hover: none) and skip the whole
+            block, leaving the JS showButtons/buttons-visible path as the only trigger. */}
         <div className={cn(
-          "absolute inset-0 flex items-center justify-center pointer-events-none group-hover:pointer-events-auto",
+          "absolute inset-0 flex items-center justify-center pointer-events-none card-reveal-buttons",
           showButtons && "pointer-events-auto",
         )}>
           <div className="flex flex-col space-y-2">
@@ -433,7 +449,7 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
             swallow the click, since this div has no click handler of its own to pass it on. */}
         <div className={cn(
           "absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent transition-opacity duration-300 ease-out pointer-events-none",
-          "opacity-0 group-hover:opacity-100",
+          "opacity-0 card-reveal-on-hover",
           showButtons && "opacity-100",
         )}>
           <h3 className="text-white text-sm font-semibold line-clamp-1">
