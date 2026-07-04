@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { toggleStatus, type MediaType, type SavedStatus, type SavedCard } from "@/lib/saved-media"
 
 const MEDIA_TYPES: MediaType[] = ["movie", "tvshow", "book"]
-const STATUSES: SavedStatus[] = ["to_watch", "watched"]
+const STATUSES: SavedStatus[] = ["to_watch", "watching", "watched"]
 
 export async function POST(request: NextRequest) {
   try {

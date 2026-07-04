@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { listForUser, type MediaType, type SavedStatus } from "@/lib/saved-media"
 
 const MEDIA_TYPES: MediaType[] = ["movie", "tvshow", "book"]
-const STATUSES: SavedStatus[] = ["to_watch", "watched"]
+const STATUSES: SavedStatus[] = ["to_watch", "watching", "watched"]
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Default response is lightweight keys (for hydrating button state); include the
-    // full slim card only when explicitly requested (used to render the My List page).
+    // full slim card only when explicitly requested (used to render the Library page).
     const items = docs.map((d) =>
       withCards
         ? { mediaType: d.mediaType, mediaId: d.mediaId, status: d.status, card: d.card }

@@ -18,6 +18,11 @@ export function middleware(request: NextRequest) {
     else if (pathname.startsWith('/api/redisHandler')) {
       response.headers.set('Cache-Control', 'public, max-age=60, must-revalidate')
     }
+    // Per-user saved-media state changes on every save/watch click and must never
+    // be served stale from the browser's HTTP cache (which is shared across tabs).
+    else if (pathname.startsWith('/api/media/')) {
+      response.headers.set('Cache-Control', 'private, no-store, must-revalidate')
+    }
     // Default for other API routes
     else {
       response.headers.set('Cache-Control', 'private, max-age=300, must-revalidate')

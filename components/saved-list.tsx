@@ -28,8 +28,22 @@ type TypeFilter = "all" | MediaType
 const TYPE_FILTERS: { key: TypeFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "movie", label: "Movies" },
-  { key: "tvshow", label: "TV Shows" },
+  { key: "tvshow", label: "TV shows" },
   { key: "book", label: "Books" },
+]
+
+// Homepage sections are addressed via URL hash (see components/client-navigation.tsx),
+// using the plural section names rather than our singular MediaType values.
+const HOMEPAGE_SECTION_HASH: Record<MediaType, string> = {
+  movie: "movies",
+  tvshow: "tvshows",
+  book: "books",
+}
+
+const TABS: { key: SavedStatus; label: string; activeClass: string }[] = [
+  { key: "to_watch", label: "Saved", activeClass: "bg-primary text-white" },
+  { key: "watching", label: "In Progress", activeClass: "bg-amber-600 text-white" },
+  { key: "watched", label: "Completed", activeClass: "bg-green-600 text-white" },
 ]
 
 export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
@@ -49,11 +63,22 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
   const effectiveStatus = (item: SavedItem): SavedStatus | null =>
     isLoaded ? getStatus(item.mediaType, item.mediaId) : item.status
 
-  const visibleItems = items.filter((item) => {
-    if (effectiveStatus(item) !== activeTab) return false
-    if (typeFilter !== "all" && item.mediaType !== typeFilter) return false
-    return true
-  })
+  const typeMatchedItems = items.filter(
+    (item) => typeFilter === "all" || item.mediaType === typeFilter,
+  )
+
+  const countsByStatus: Record<SavedStatus, number> = {
+    to_watch: 0,
+    watching: 0,
+    watched: 0,
+  }
+  for (const item of typeMatchedItems) {
+    const status = effectiveStatus(item)
+    if (status) countsByStatus[status]++
+  }
+
+  const visibleItems = typeMatchedItems.filter((item) => effectiveStatus(item) === activeTab)
+  const totalCount = typeMatchedItems.filter((item) => effectiveStatus(item) !== null).length
 
   return (
     <div className="min-h-screen bg-background">
@@ -66,35 +91,35 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
                 <Image src="/logo-blue.png" alt="ClickNotes Logo" fill className="object-contain" priority />
               </div>
             </Link>
-            <h1 className="text-lg sm:text-2xl font-bold text-foreground">My List</h1>
             <UserProfile />
           </div>
         </div>
       </nav>
 
       <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="flex items-baseline justify-between mb-5">
+          <h2 className="text-base font-semibold text-foreground">Your library</h2>
+          <span className="text-xs text-muted-foreground">{totalCount} saved</span>
+        </div>
+
         {/* Status tabs */}
-        <div className="flex items-center gap-2 mb-4">
-          <button
-            onClick={() => setActiveTab("to_watch")}
-            className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors hover:cursor-pointer ${
-              activeTab === "to_watch"
-                ? "bg-primary text-white"
-                : "bg-surface-elevated text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            To Watch / Read
-          </button>
-          <button
-            onClick={() => setActiveTab("watched")}
-            className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors hover:cursor-pointer ${
-              activeTab === "watched"
-                ? "bg-green-600 text-white"
-                : "bg-surface-elevated text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Watched / Read
-          </button>
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium text-sm transition-colors hover:cursor-pointer ${
+                activeTab === tab.key
+                  ? tab.activeClass
+                  : "bg-surface-elevated text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+              <span className={activeTab === tab.key ? "opacity-80" : "text-muted-foreground/70"}>
+                {countsByStatus[tab.key]}
+              </span>
+            </button>
+          ))}
         </div>
 
         {/* Type filters */}
@@ -120,10 +145,10 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
               Nothing here yet
             </p>
             <p className="text-muted-foreground text-sm mb-6">
-              Save movies, TV shows, and books to build your list.
+              Save movies, TV shows, and books to build your library.
             </p>
             <Link
-              href="/"
+              href={typeFilter === "all" ? "/" : `/#${HOMEPAGE_SECTION_HASH[typeFilter]}`}
               className="px-4 py-2 bg-primary text-white rounded-lg font-medium text-sm hover:bg-blue-800 transition-colors"
             >
               Browse popular

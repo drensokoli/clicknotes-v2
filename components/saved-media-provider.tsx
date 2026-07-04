@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
 export type MediaType = "movie" | "tvshow" | "book"
-export type SavedStatus = "to_watch" | "watched"
+export type SavedStatus = "to_watch" | "watching" | "watched"
 
 // The full card item to persist. Typed as `unknown` here (rather than importing
 // MediaItem from media-card) to avoid a circular import — media-card imports this
@@ -52,7 +52,9 @@ export function SavedMediaProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch("/api/media/saved")
+        // Never serve this from any cache layer - it must reflect saves/watches
+        // made just now, including from another tab of the same browser.
+        const res = await fetch("/api/media/saved", { cache: "no-store" })
         if (!res.ok) return
         const data = await res.json()
         if (cancelled || !data.success || !Array.isArray(data.items)) return

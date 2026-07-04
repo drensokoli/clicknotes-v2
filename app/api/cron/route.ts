@@ -3,8 +3,21 @@ import { createClient } from "@redis/client"
 import { revalidateTag } from 'next/cache'
 import { fetchJSON } from '../../../lib/secure-fetch'
 import { sendEmail } from '../../../lib/email-service'
+import { getOmdbData } from '../../../lib/omdb-helpers'
 import { Book } from '@/components/media-card'
 import { optimizeMovieData, optimizeTVShowData, optimizeBookData } from '../../../lib/data-optimization'
+
+// How many items to enrich (TMDB trailer + OMDB lookup) concurrently per batch during
+// population. Keeps wall-clock time bounded (240 items / 6 ~= 40 batches) while staying
+// gentle on both providers - see the OMDB rate-limit calculation in the PR/commit message.
+const ENRICHMENT_BATCH_SIZE = 6
+const ENRICHMENT_BATCH_DELAY_MS = 150
+
+function buildStremioLink(mediaType: 'movie' | 'tvshow', title: string, imdbId: string) {
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+  const path = mediaType === 'movie' ? 'movie' : 'series'
+  return `https://www.strem.io/s/${path}/${slug}-${imdbId.replace('tt', '')}`
+}
 
 // Force dynamic execution to prevent caching issues with Vercel cron jobs
 export const dynamic = 'force-dynamic'
@@ -99,9 +112,12 @@ const meetsQualityStandards = (rating: number, voteCount: number) => {
   return true;
 };
 
-// Populate movies with minimal card payloads (no per-item TMDB/OMDB detail calls -
-// detail pages/modals fetch full details live from TMDB on demand)
-async function populateMovies(tmdbApiKey: string, force = false) {
+// Populate movies with card payloads that also carry a trimmed trailer + OMDB lookup
+// (runtime, genres, one YouTube trailer, imdbId/rated/awards, Stremio link) so the
+// homepage/search Watch and Trailer buttons render instantly instead of popping in
+// after the modal's on-demand fetch. Cast/crew stays on-demand only (too heavy to embed
+// at this volume) - see the OMDB rate-limit calculation in the PR/commit message.
+async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[], force = false) {
   const client = createRedisClient()
   await client.connect()
 
@@ -119,13 +135,17 @@ async function populateMovies(tmdbApiKey: string, force = false) {
 
     type MovieInput = Parameters<typeof optimizeMovieData>[0]
     type MovieCard = ReturnType<typeof optimizeMovieData>
+    interface CandidateMovie {
+      id: number; title: string; overview: string; poster_path: string | null
+      backdrop_path: string | null; release_date: string; vote_average: number; vote_count: number
+    }
 
-    const filteredMovies: MovieCard[] = []
+    const candidates: CandidateMovie[] = []
     const seenIds = new Set<number>()
     let totalProcessed = 0
     let done = false
 
-    // Fetch movies page by page until we have 240 filtered minimal movies
+    // Fetch movies page by page until we have 240 filtered candidates
     for (let page = 1; page <= 20 && !done; page++) {
       console.log(`[POPULATE] Fetching movies page ${page}/20...`)
 
@@ -138,7 +158,7 @@ async function populateMovies(tmdbApiKey: string, force = false) {
       }
 
       for (let i = 0; i < moviesData.results.length; i++) {
-        if (filteredMovies.length >= 240) {
+        if (candidates.length >= 240) {
           done = true
           break
         }
@@ -155,8 +175,7 @@ async function populateMovies(tmdbApiKey: string, force = false) {
         if (isEroticContent(title, description)) continue
         if (!meetsQualityStandards(movie.vote_average, movie.vote_count || 0)) continue
 
-        // Store only minimal card fields; modal fetches full details on demand.
-        const optimizedMovie = optimizeMovieData({
+        candidates.push({
           id: movie.id,
           title: movie.title,
           overview: movie.overview,
@@ -165,9 +184,7 @@ async function populateMovies(tmdbApiKey: string, force = false) {
           release_date: movie.release_date,
           vote_average: movie.vote_average,
           vote_count: movie.vote_count ?? 0,
-        } as MovieInput)
-
-        filteredMovies.push(optimizedMovie)
+        })
       }
 
       // Small delay between pages to reduce TMDB rate-limit pressure
@@ -176,8 +193,57 @@ async function populateMovies(tmdbApiKey: string, force = false) {
       }
     }
 
-    const finalMovies = filteredMovies.slice(0, 240)
     console.log(`[POPULATE] Total processed: ${totalProcessed}`)
+    console.log(`[POPULATE] Enriching ${candidates.length} candidates with trailer + OMDB data...`)
+
+    // Enrich in small concurrent batches: 1 TMDB call (videos only, no credits) + 1 OMDB
+    // lookup per item. Failures here are non-fatal - the card still ships with base
+    // fields, just without the pre-fetched Watch/Trailer buttons for that one item.
+    const finalMovies: MovieCard[] = []
+    for (let i = 0; i < candidates.length; i += ENRICHMENT_BATCH_SIZE) {
+      const batch = candidates.slice(i, i + ENRICHMENT_BATCH_SIZE)
+      const enriched = await Promise.all(batch.map(async (movie) => {
+        let details: MovieInput['details']
+        let omdbData: MovieInput['omdbData']
+        let stremioLink: string | undefined
+
+        try {
+          const tmdbDetails = await fetchJSON(
+            `https://api.themoviedb.org/3/movie/${movie.id}?api_key=${tmdbApiKey}&append_to_response=videos`
+          )
+          details = {
+            runtime: tmdbDetails.runtime,
+            genres: tmdbDetails.genres || [],
+            videos: tmdbDetails.videos || { results: [] },
+          }
+        } catch (error) {
+          console.warn(`[POPULATE] Trailer/runtime fetch failed for movie ${movie.id}:`, error)
+        }
+
+        try {
+          if (movie.release_date) {
+            const year = movie.release_date.split('-')[0]
+            const omdb = await getOmdbData(omdbApiKeys, movie.title, year, 'movie')
+            if (omdb) omdbData = omdb
+          }
+        } catch (error) {
+          console.warn(`[POPULATE] OMDB fetch failed for movie ${movie.id}:`, error)
+        }
+
+        if (omdbData?.imdbId) {
+          stremioLink = buildStremioLink('movie', movie.title, omdbData.imdbId)
+        }
+
+        return optimizeMovieData({ ...movie, details, omdbData, stremioLink } as MovieInput)
+      }))
+
+      finalMovies.push(...enriched)
+
+      if (i + ENRICHMENT_BATCH_SIZE < candidates.length) {
+        await delay(ENRICHMENT_BATCH_DELAY_MS)
+      }
+    }
+
     console.log(`[POPULATE] Final movies_v2 count: ${finalMovies.length}`)
 
     await client.set(moviesKey, JSON.stringify(finalMovies))
@@ -194,8 +260,9 @@ async function populateMovies(tmdbApiKey: string, force = false) {
   }
 }
 
-// Populate TV shows with minimal card payloads (no per-item TMDB/OMDB detail calls)
-async function populateTVShows(tmdbApiKey: string, force = false) {
+// Populate TV shows with card payloads that also carry a trimmed trailer + OMDB lookup -
+// same rationale as populateMovies above.
+async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[], force = false) {
   const client = createRedisClient()
   await client.connect()
 
@@ -213,8 +280,12 @@ async function populateTVShows(tmdbApiKey: string, force = false) {
 
     type TVInput = Parameters<typeof optimizeTVShowData>[0]
     type TVCard = ReturnType<typeof optimizeTVShowData>
+    interface CandidateTVShow {
+      id: number; name: string; overview: string; poster_path: string | null
+      backdrop_path: string | null; first_air_date: string; vote_average: number; vote_count: number
+    }
 
-    const filteredTVShows: TVCard[] = []
+    const candidates: CandidateTVShow[] = []
     const seenIds = new Set<number>()
     let totalProcessed = 0
     let done = false
@@ -231,7 +302,7 @@ async function populateTVShows(tmdbApiKey: string, force = false) {
       }
 
       for (let i = 0; i < tvShowsData.results.length; i++) {
-        if (filteredTVShows.length >= 240) {
+        if (candidates.length >= 240) {
           done = true
           break
         }
@@ -248,7 +319,7 @@ async function populateTVShows(tmdbApiKey: string, force = false) {
         if (isEroticContent(title, description)) continue
         if (!meetsQualityStandards(tvShow.vote_average, tvShow.vote_count || 0)) continue
 
-        const optimizedTVShow = optimizeTVShowData({
+        candidates.push({
           id: tvShow.id,
           name: tvShow.name,
           overview: tvShow.overview,
@@ -257,9 +328,7 @@ async function populateTVShows(tmdbApiKey: string, force = false) {
           first_air_date: tvShow.first_air_date,
           vote_average: tvShow.vote_average,
           vote_count: tvShow.vote_count ?? 0,
-        } as TVInput)
-
-        filteredTVShows.push(optimizedTVShow)
+        })
       }
 
       if (!done && page < 20) {
@@ -267,8 +336,58 @@ async function populateTVShows(tmdbApiKey: string, force = false) {
       }
     }
 
-    const finalTVShows = filteredTVShows.slice(0, 240)
     console.log(`[POPULATE] Total processed: ${totalProcessed}`)
+    console.log(`[POPULATE] Enriching ${candidates.length} candidates with trailer + OMDB data...`)
+
+    const finalTVShows: TVCard[] = []
+    for (let i = 0; i < candidates.length; i += ENRICHMENT_BATCH_SIZE) {
+      const batch = candidates.slice(i, i + ENRICHMENT_BATCH_SIZE)
+      const enriched = await Promise.all(batch.map(async (tvShow) => {
+        let details: TVInput['details']
+        let omdbData: TVInput['omdbData']
+        let stremioLink: string | undefined
+
+        try {
+          const tmdbDetails = await fetchJSON(
+            `https://api.themoviedb.org/3/tv/${tvShow.id}?api_key=${tmdbApiKey}&append_to_response=videos`
+          )
+          details = {
+            genres: tmdbDetails.genres || [],
+            number_of_seasons: tmdbDetails.number_of_seasons,
+            number_of_episodes: tmdbDetails.number_of_episodes,
+            status: tmdbDetails.status,
+            tagline: tmdbDetails.tagline,
+            type: tmdbDetails.type,
+            videos: tmdbDetails.videos || { results: [] },
+          }
+        } catch (error) {
+          console.warn(`[POPULATE] Trailer fetch failed for TV show ${tvShow.id}:`, error)
+        }
+
+        try {
+          if (tvShow.first_air_date) {
+            const year = tvShow.first_air_date.split('-')[0]
+            const omdb = await getOmdbData(omdbApiKeys, tvShow.name, year, 'series')
+            if (omdb) omdbData = omdb
+          }
+        } catch (error) {
+          console.warn(`[POPULATE] OMDB fetch failed for TV show ${tvShow.id}:`, error)
+        }
+
+        if (omdbData?.imdbId) {
+          stremioLink = buildStremioLink('tvshow', tvShow.name, omdbData.imdbId)
+        }
+
+        return optimizeTVShowData({ ...tvShow, details, omdbData, stremioLink } as TVInput)
+      }))
+
+      finalTVShows.push(...enriched)
+
+      if (i + ENRICHMENT_BATCH_SIZE < candidates.length) {
+        await delay(ENRICHMENT_BATCH_DELAY_MS)
+      }
+    }
+
     console.log(`[POPULATE] Final tvshows_v2 count: ${finalTVShows.length}`)
 
     await client.set(tvShowsKey, JSON.stringify(finalTVShows))
@@ -542,6 +661,11 @@ async function populateAll(force = false) {
   const tmdbApiKey = process.env.TMDB_API_KEY!
   const googleBooksApiKey = process.env.GOOGLE_BOOKS_API_KEY_2!
   const nyTimesApiKey = process.env.NYTIMES_API_KEY!
+  const omdbApiKeys = [
+    process.env.OMDB_API_KEY_1!,
+    process.env.OMDB_API_KEY_2!,
+    process.env.OMDB_API_KEY_3!,
+  ]
 
   if (!tmdbApiKey || !googleBooksApiKey || !nyTimesApiKey) {
     throw new Error('Missing required API keys for population');
@@ -551,13 +675,13 @@ async function populateAll(force = false) {
   const startTime = Date.now();
 
   const [movies, books] = await Promise.all([
-    populateMovies(tmdbApiKey, force),
+    populateMovies(tmdbApiKey, omdbApiKeys, force),
     populateBooks(googleBooksApiKey, nyTimesApiKey, force)
   ]);
 
   // Populate TV shows after movies to reduce TMDB rate-limit pressure
   const tvShowsStartTime = Date.now();
-  const tvShows = await populateTVShows(tmdbApiKey, force);
+  const tvShows = await populateTVShows(tmdbApiKey, omdbApiKeys, force);
   const tvShowsDuration = Date.now() - tvShowsStartTime;
 
   const totalDuration = Date.now() - startTime;
@@ -624,8 +748,13 @@ export async function POST(request: NextRequest) {
       });
     } else if (action === 'populate-movies') {
       const tmdbApiKey = process.env.TMDB_API_KEY!
+      const omdbApiKeys = [
+        process.env.OMDB_API_KEY_1!,
+        process.env.OMDB_API_KEY_2!,
+        process.env.OMDB_API_KEY_3!,
+      ]
       const startTime = Date.now();
-      const movies = await populateMovies(tmdbApiKey, !!force);
+      const movies = await populateMovies(tmdbApiKey, omdbApiKeys, !!force);
       const duration = Date.now() - startTime;
 
       return NextResponse.json({
@@ -635,8 +764,13 @@ export async function POST(request: NextRequest) {
       });
     } else if (action === 'populate-tvshows') {
       const tmdbApiKey = process.env.TMDB_API_KEY!
+      const omdbApiKeys = [
+        process.env.OMDB_API_KEY_1!,
+        process.env.OMDB_API_KEY_2!,
+        process.env.OMDB_API_KEY_3!,
+      ]
       const startTime = Date.now();
-      const tvShows = await populateTVShows(tmdbApiKey, !!force);
+      const tvShows = await populateTVShows(tmdbApiKey, omdbApiKeys, !!force);
       const duration = Date.now() - startTime;
 
       return NextResponse.json({

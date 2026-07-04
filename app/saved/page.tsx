@@ -8,7 +8,7 @@ import type { Metadata } from "next"
 export const dynamic = "force-dynamic"
 
 export const metadata: Metadata = {
-  title: "My List - ClickNotes v2",
+  title: "Library - ClickNotes v2",
   description: "Your saved movies, TV shows, and books.",
 }
 

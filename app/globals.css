@@ -578,47 +578,42 @@ body {
   animation-name: slide-in-from-bottom-2;
 }
 
-/* Smooth button animations */
+/* Smooth button animations - the reveal (card-hover driven, via --slide-y) and the
+   individual button hover-scale (--btn-scale) each own a different CSS variable that
+   feed into ONE transform declaration. If a plain literal `transform` value were set
+   by two different rules (e.g. one for translateY, one for hover:scale), whichever
+   rule the cursor's current state matches last would clobber the other's transform
+   entirely, causing a visible snap the instant the cursor moved from "over the card"
+   to "over a button". Composing through variables lets both effects coexist smoothly. */
 .button-slide-up {
-  transform: translateY(8px);
+  --slide-y: 8px;
+  --btn-scale: 1;
+  transform: translateY(var(--slide-y)) scale(var(--btn-scale));
   opacity: 0;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease-in-out, color 0.2s ease-in-out;
 }
 
-.button-slide-up.show {
-  transform: translateY(0);
-  opacity: 1;
+.button-slide-up:hover {
+  --btn-scale: 1.1;
 }
 
-.button-slide-up.show.delay-1 {
-  transition-delay: 0ms;
-}
-
-.button-slide-up.show.delay-2 {
-  transition-delay: 50ms;
-}
-
-.button-slide-up.show.delay-3 {
-  transition-delay: 100ms;
-}
-
-/* Desktop hover animations */
+/* Desktop hover animations - staggered reveal when the card (not just the button) is hovered */
 .group:hover .button-slide-up.delay-1 {
-  transform: translateY(0);
+  --slide-y: 0px;
   opacity: 1;
   transition-delay: 0ms;
 }
 
 .group:hover .button-slide-up.delay-2 {
-  transform: translateY(0);
+  --slide-y: 0px;
   opacity: 1;
-  transition-delay: 50ms;
+  transition-delay: 60ms;
 }
 
 .group:hover .button-slide-up.delay-3 {
-  transform: translateY(0);
+  --slide-y: 0px;
   opacity: 1;
-  transition-delay: 100ms;
+  transition-delay: 120ms;
 }
 
 /* Smooth scrolling */

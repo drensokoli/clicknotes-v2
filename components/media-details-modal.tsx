@@ -475,122 +475,145 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                 </div>
               </div>
 
-              {/* Action buttons */}
-              <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
+              {/* Action buttons - two rows: your status on this item, then external links */}
+              <div className="flex flex-col items-center gap-3 pt-5 sm:pt-6 px-4">
 
-                {/* Save Button */}
-                <motion.button
-                  onClick={() => toggle(item.type, item.id, "to_watch", item)}
-                  className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer ${
-                    savedStatus === "to_watch"
-                      ? "bg-blue-800 text-white ring-2 ring-blue-300"
-                      : "bg-primary text-white hover:bg-blue-800"
-                  }`}
-                  variants={buttonVariants}
-                  custom={3}
-                  whileHover="hover"
-                  whileTap="tap"
-                >
-                  <Bookmark className={`w-4 h-4 ${savedStatus === "to_watch" ? "fill-current" : ""}`} />
-                  <span className="hidden sm:inline">
-                    {savedStatus === "to_watch"
-                      ? (item.type === 'book' ? 'Saved to Read' : 'Saved to Watch')
-                      : 'Save'}
-                  </span>
-                </motion.button>
-
-                {/* Watched/Read Button */}
-                <motion.button
-                  onClick={() => toggle(item.type, item.id, "watched", item)}
-                  className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer ${
-                    savedStatus === "watched"
-                      ? "bg-green-700 text-white ring-2 ring-green-300"
-                      : "bg-green-600 hover:bg-green-700 text-white"
-                  }`}
-                  variants={buttonVariants}
-                  custom={4}
-                  whileHover="hover"
-                  whileTap="tap"
-                >
-                  <Eye className={`w-4 h-4 ${savedStatus === "watched" ? "fill-current" : ""}`} />
-                  <span className="hidden sm:inline">
-                    {savedStatus === "watched"
-                      ? (item.type === 'book' ? 'Read' : 'Watched')
-                      : (item.type === 'book' ? 'Mark Read' : 'Mark Watched')}
-                  </span>
-                </motion.button>
-
-                {/* Watch on Stremio - Only for movies/TV with IMDB ID */}
-                {(item.type === 'movie' || item.type === 'tvshow') && omdbData?.imdbId && (
-                  <motion.a
-                    href={`https://www.strem.io/s/${item.type === 'movie' ? 'movie' : 'series'}/${getTitle().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-[#7B5BF5] hover:bg-[#6344e2] text-white rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
-                    variants={buttonVariants}
-                    custom={0}
-                    whileHover="hover"
-                    whileTap="tap"
-                  >
-                    <MonitorPlay className="w-4 h-4" />
-                    <span className="hidden sm:inline">Watch</span>
-                  </motion.a>
-                )}
-
-                {/* Read on Anna's Archive - Only for books */}
-                {item.type === 'book' && (
-                  <motion.a
-                    href={`https://annas-archive.org/search?q=${encodeURIComponent(getTitle())}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
-                    variants={buttonVariants}
-                    custom={1}
-                    whileHover="hover"
-                    whileTap="tap"
-                  >
-                    <BookOpen className="w-4 h-4" />
-                    <span className="hidden sm:inline">Read</span>
-                  </motion.a>
-                )}
-
-                {/* Watch Trailer - Only for movies/TV */}
-                {(item.type === 'movie' || item.type === 'tvshow') && getTrailerUrl() && (
+                {/* Status row: Save / In Progress / Completed - same wording for
+                    every media type, active state conveyed by color rather than text */}
+                <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
                   <motion.button
-                    onClick={() => {
-                      // Scroll to trailer section
-                      const trailerSection = document.getElementById('trailer-section')
-                      if (trailerSection) {
-                        trailerSection.scrollIntoView({ behavior: 'smooth' })
-                      }
-                    }}
-                    className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
+                    onClick={() => toggle(item.type, item.id, "to_watch", item)}
+                    className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer ${
+                      savedStatus === "to_watch"
+                        ? "bg-blue-800 text-white ring-2 ring-blue-300"
+                        : "bg-primary text-white hover:bg-blue-800"
+                    }`}
                     variants={buttonVariants}
-                    custom={2}
+                    custom={3}
                     whileHover="hover"
                     whileTap="tap"
-                    title="Scroll to trailer section"
                   >
-                    <Play className="w-4 h-4" />
-                    <span className="hidden sm:inline">View Trailer</span>
+                    <Bookmark className={`w-4 h-4 ${savedStatus === "to_watch" ? "fill-current" : ""}`} />
+                    <span className="hidden sm:inline">{savedStatus === "to_watch" ? "Saved" : "Save"}</span>
                   </motion.button>
-                )}
-                {/* More Button */}
-                {getExternalLink() && (
-                  <motion.a
-                    href={getExternalLink()!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-gray-600 hover:bg-gray-800 text-white rounded-lg transition-colors text-sm sm:text-base hover:cursor-pointer"
+
+                  <motion.button
+                    onClick={() => toggle(item.type, item.id, "watching", item)}
+                    className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer ${
+                      savedStatus === "watching"
+                        ? "bg-amber-700 text-white ring-2 ring-amber-300"
+                        : "bg-amber-600 hover:bg-amber-700 text-white"
+                    }`}
+                    variants={buttonVariants}
+                    custom={4}
+                    whileHover="hover"
+                    whileTap="tap"
+                  >
+                    <Play className={`w-4 h-4 ${savedStatus === "watching" ? "fill-current" : ""}`} />
+                    <span className="hidden sm:inline">In Progress</span>
+                  </motion.button>
+
+                  <motion.button
+                    onClick={() => toggle(item.type, item.id, "watched", item)}
+                    className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer ${
+                      savedStatus === "watched"
+                        ? "bg-green-700 text-white ring-2 ring-green-300"
+                        : "bg-green-600 hover:bg-green-700 text-white"
+                    }`}
                     variants={buttonVariants}
                     custom={5}
                     whileHover="hover"
                     whileTap="tap"
                   >
-                    <ExternalLink className="w-4 h-4" />
-                    <span className="hidden sm:inline">More</span>
-                  </motion.a>
-                )}
+                    <Eye className={`w-4 h-4 ${savedStatus === "watched" ? "fill-current" : ""}`} />
+                    <span className="hidden sm:inline">Completed</span>
+                  </motion.button>
+                </div>
+
+                {/* External links row */}
+                <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
+                  {/* Watch on Stremio - Only for movies/TV with IMDB ID */}
+                  {!isLoading && (item.type === 'movie' || item.type === 'tvshow') && omdbData?.imdbId && (
+                    <motion.a
+                      href={`https://www.strem.io/s/${item.type === 'movie' ? 'movie' : 'series'}/${getTitle().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-[#7B5BF5] hover:bg-[#6344e2] text-white rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
+                      variants={buttonVariants}
+                      custom={0}
+                      whileHover="hover"
+                      whileTap="tap"
+                    >
+                      <MonitorPlay className="w-4 h-4" />
+                      <span className="hidden sm:inline">Watch</span>
+                    </motion.a>
+                  )}
+
+                  {/* Read on Anna's Archive - Only for books */}
+                  {item.type === 'book' && (
+                    <motion.a
+                      href={`https://annas-archive.org/search?q=${encodeURIComponent(getTitle())}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
+                      variants={buttonVariants}
+                      custom={1}
+                      whileHover="hover"
+                      whileTap="tap"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      <span className="hidden sm:inline">Read</span>
+                    </motion.a>
+                  )}
+
+                  {/* Loading placeholder for Watch/Trailer while their data is still being
+                      fetched live (pre-fetched items resolve isLoading to false almost
+                      immediately, so this only shows for the on-demand fallback case) */}
+                  {isLoading && (item.type === 'movie' || item.type === 'tvshow') && (
+                    <div className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-surface-elevated text-muted-foreground text-sm sm:text-base">
+                      <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/40 border-t-transparent animate-spin" />
+                      <span className="hidden sm:inline">Loading</span>
+                    </div>
+                  )}
+
+                  {/* Watch Trailer - Only for movies/TV */}
+                  {!isLoading && (item.type === 'movie' || item.type === 'tvshow') && getTrailerUrl() && (
+                    <motion.button
+                      onClick={() => {
+                        // Scroll to trailer section
+                        const trailerSection = document.getElementById('trailer-section')
+                        if (trailerSection) {
+                          trailerSection.scrollIntoView({ behavior: 'smooth' })
+                        }
+                      }}
+                      className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
+                      variants={buttonVariants}
+                      custom={2}
+                      whileHover="hover"
+                      whileTap="tap"
+                      title="Scroll to trailer section"
+                    >
+                      <Play className="w-4 h-4" />
+                      <span className="hidden sm:inline">View Trailer</span>
+                    </motion.button>
+                  )}
+                  {/* More Button */}
+                  {getExternalLink() && (
+                    <motion.a
+                      href={getExternalLink()!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-gray-600 hover:bg-gray-800 text-white rounded-lg transition-colors text-sm sm:text-base hover:cursor-pointer"
+                      variants={buttonVariants}
+                      custom={5}
+                      whileHover="hover"
+                      whileTap="tap"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span className="hidden sm:inline">More</span>
+                    </motion.a>
+                  )}
+                </div>
               </div>
               {/* Content */}
               <motion.div
@@ -642,8 +665,25 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                   </div>
                 )}
 
-                {/* Trailer - Only for movies and TV shows */}
-                {(item.type === 'movie' || item.type === 'tvshow') && getYouTubeVideoId() && (
+                {/* Runtime - moved up under Overview since it's core info, not a footnote */}
+                {getRuntime() ? (
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                      {item.type === 'movie' ? 'Runtime' : 'Episode Runtime'}
+                    </h3>
+                    <p className="text-foreground text-sm sm:text-base">
+                      {getRuntime()} minutes
+                    </p>
+                  </div>
+                ) : isLoading && (item.type === 'movie' || item.type === 'tvshow') ? (
+                  <div className="h-4 w-24 rounded bg-surface-elevated animate-pulse" />
+                ) : null}
+
+                {/* Trailer - Only for movies and TV shows. Gated on !isLoading so it
+                    doesn't silently pop in mid-fetch without the shared loading
+                    indicator below having shown first (pre-fetched items skip this,
+                    since isLoading resolves to false almost immediately for them). */}
+                {!isLoading && (item.type === 'movie' || item.type === 'tvshow') && getYouTubeVideoId() && (
                   <motion.div
                     id="trailer-section"
                     initial={{ opacity: 0, y: 20 }}
@@ -756,28 +796,18 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                   </div>
                 )}
 
-                {/* Loading state for cast/crew */}
+                {/* Loading state covering everything that isn't already on the card:
+                    trailer, cast, director/creator, runtime, seasons. Title/poster/date/
+                    rating/overview/status-buttons render instantly above regardless. */}
                 {isLoading && (item.type === 'movie' || item.type === 'tvshow') && (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    <span className="ml-3 text-muted-foreground">Loading details...</span>
+                    <span className="ml-3 text-muted-foreground">Loading trailer, cast &amp; more...</span>
                   </div>
                 )}
 
                 {/* Additional Info */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  {/* Runtime */}
-                  {getRuntime() && (
-                    <div>
-                      <h4 className="text-sm font-semibold text-muted-foreground mb-1">
-                        {item.type === 'movie' ? 'Runtime' : 'Episode Runtime'}
-                      </h4>
-                      <p className="text-foreground text-sm sm:text-base">
-                        {getRuntime()} minutes
-                      </p>
-                    </div>
-                  )}
-
                   {/* Seasons/Episodes for TV shows */}
                   {detailedData && 'number_of_seasons' in detailedData && (
                     <div>

@@ -5,11 +5,14 @@ const db = process.env.MONGODB_DB_NAME || "clicknotes-v2"
 const COLLECTION = "savedMedia"
 
 export type MediaType = "movie" | "tvshow" | "book"
-export type SavedStatus = "to_watch" | "watched"
+export type SavedStatus = "to_watch" | "watching" | "watched"
 
-// Slim card snapshot — only the fields MediaCard needs to render and to re-open
-// the detail modal (which re-fetches full details from the id on demand). No
-// details/credits/videos/omdb blobs are stored, keeping each doc ~300 bytes.
+// Slim card snapshot — the fields MediaCard needs to render, plus a small trimmed
+// `details`/`omdbData`/`stremioLink` (runtime, genres, one trailer, imdbId/rated/awards)
+// mirroring what population embeds in movies_v2/tvshows_v2. This lets the detail modal's
+// existing "already have details+omdbData? skip the live fetch" check apply to saved
+// items too, so Library cards get instant Watch/Trailer buttons the same as browsing
+// cards. No cast/crew/full videos list here - that stays on-demand only.
 export interface SavedCard {
   id: number | string
   type: MediaType
@@ -22,6 +25,18 @@ export interface SavedCard {
   release_date?: string
   first_air_date?: string
   vote_average?: number
+  details?: {
+    runtime?: number
+    genres?: Array<{ id: number; name: string }>
+    number_of_seasons?: number
+    number_of_episodes?: number
+    status?: string
+    tagline?: string
+    type?: string
+    videos?: { results: Array<{ key: string; name: string; site: string; type: string; official: boolean }> }
+  }
+  omdbData?: { imdbId: string; rated: string; runtime: string; awards: string }
+  stremioLink?: string
   // book
   volumeInfo?: {
     title?: string
@@ -63,8 +78,11 @@ export async function getSavedMediaCollection(): Promise<Collection<SavedMediaDo
   return collection
 }
 
-// Whitelist just the display fields for the given media type so we never persist
-// the heavy `details` / `omdbData` / `stremioLink` blobs the client card may carry.
+// Whitelist just the display + trimmed detail fields for the given media type. We still
+// never persist the heavy stuff (cast/crew, full videos list) - only what population
+// already trimmed down (see optimizeMovieData/optimizeTVShowData), preserved as-is if
+// the incoming card carries it (e.g. saved straight from a browsing card that already
+// has it embedded).
 export function toSlimCard(mediaType: MediaType, card: SavedCard): SavedCard {
   if (mediaType === "movie") {
     return {
@@ -76,6 +94,9 @@ export function toSlimCard(mediaType: MediaType, card: SavedCard): SavedCard {
       backdrop_path: card.backdrop_path ?? null,
       release_date: card.release_date,
       vote_average: card.vote_average,
+      details: card.details,
+      omdbData: card.omdbData,
+      stremioLink: card.stremioLink,
     }
   }
 
@@ -89,6 +110,9 @@ export function toSlimCard(mediaType: MediaType, card: SavedCard): SavedCard {
       backdrop_path: card.backdrop_path ?? null,
       first_air_date: card.first_air_date,
       vote_average: card.vote_average,
+      details: card.details,
+      omdbData: card.omdbData,
+      stremioLink: card.stremioLink,
     }
   }
 
@@ -124,7 +148,7 @@ export async function listForUser(userId: string, filter: ListFilter = {}): Prom
   return collection.find(query).sort({ updatedAt: -1 }).toArray()
 }
 
-// Toggle semantics for the two buttons (each toggles its own status):
+// Toggle semantics for the three buttons (each toggles its own status):
 //   - no existing doc            -> insert with `status`         => returns status
 //   - existing doc, same status  -> delete (un-save)             => returns null
 //   - existing doc, other status -> update to `status`           => returns status

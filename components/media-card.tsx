@@ -176,29 +176,14 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
   const { openModal } = useModal()
   const { getStatus, toggle } = useSavedMedia()
   const { resolvedTheme } = useTheme()
-  const [showButtons, setShowButtons] = useState(false)
   const [mounted, setMounted] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
-  
+
   // Prevent hydration mismatch by only using theme after component mounts
   useEffect(() => {
     setMounted(true)
   }, [])
-  
-  // Hide buttons when clicking outside on mobile
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (cardRef.current && !cardRef.current.contains(event.target as Node)) {
-        setShowButtons(false)
-      }
-    }
 
-    if (showButtons) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showButtons])
-  
   // Safety check: ensure item has required properties
   if (!item || !item.type) {
     console.warn('MediaCard received invalid item:', item);
@@ -269,7 +254,7 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
     return 0;
   };
 
-  // Current saved state for this item ("to_watch" | "watched" | null)
+  // Current saved state for this item ("to_watch" | "watching" | "watched" | null)
   const savedStatus = getStatus(item.type, item.id);
 
   return (
@@ -280,10 +265,11 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
         className
       )}
     >
-      {/* Poster/Cover Image */}
-      <div 
-        className="aspect-[2/3] relative overflow-hidden bg-gradient-to-br from-surface-elevated to-surface-tonal"
-        onClick={() => setShowButtons(!showButtons)}
+      {/* Poster/Cover Image - tapping/clicking anywhere here (except the action
+          buttons, which stop propagation) opens the detail modal */}
+      <div
+        className="aspect-[2/3] relative overflow-hidden bg-gradient-to-br from-surface-elevated to-surface-tonal cursor-pointer"
+        onClick={() => openModal(item)}
       >
         {getPosterUrl() ? (
           <Image
@@ -307,27 +293,25 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
           </div>
         )}
         
-        {/* Gradient Overlay */}
+        {/* Gradient Overlay - hover-revealed on desktop; never shown on touch devices since tapping opens the modal directly */}
         <div className={cn(
-          "absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent transition-opacity duration-150",
-          "opacity-0 group-hover:opacity-100", // Desktop hover
-          showButtons ? "opacity-100" : "", // Mobile tap state
+          "absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent transition-opacity duration-300 ease-out",
+          "opacity-0 group-hover:opacity-100",
         )} />
-        
-        {/* Action Buttons - Show on hover (desktop) or tap (mobile) */}
-        <div className={cn(
-          "absolute inset-0 flex items-center justify-center transition-all duration-150",
-          "opacity-0 group-hover:opacity-100", // Desktop hover
-          showButtons ? "opacity-100" : "", // Mobile tap state
-        )}>
+
+        {/* Action Buttons - hover-revealed on desktop only, with a staggered slide-up
+            (see .button-slide-up + .group:hover rules in globals.css). Hidden AND
+            non-interactive on touch devices (opacity-0 alone doesn't stop clicks -
+            pointer-events-none is what lets taps pass through to the poster's onClick,
+            which opens the modal). */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:pointer-events-auto">
           <div className="flex flex-col space-y-3">
             {/* Save Button */}
             <button
               className={cn(
-                "w-12 h-12 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-110 hover:cursor-pointer",
+                "w-12 h-12 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm hover:cursor-pointer",
                 "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
                 "button-slide-up delay-1 media-card-button",
-                showButtons && "show"
               )}
               style={
                 savedStatus === "to_watch"
@@ -337,7 +321,7 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
                       color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
                     }
               }
-              title={savedStatus === "to_watch" ? "Remove from list" : (item.type === "book" ? "Save to read" : "Save to watch")}
+              title={savedStatus === "to_watch" ? "Saved" : "Save"}
               onClick={(e) => {
                 e.stopPropagation();
                 toggle(item.type, item.id, "to_watch", item);
@@ -347,14 +331,39 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z" />
               </svg>
             </button>
-            
+
+            {/* Mark as Watching Button */}
+            <button
+              className={cn(
+                "w-12 h-12 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm hover:cursor-pointer",
+                "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
+                "button-slide-up delay-2 media-card-button",
+              )}
+              style={
+                savedStatus === "watching"
+                  ? { backgroundColor: "rgb(180, 83, 9)", color: "rgb(255, 255, 255)" }
+                  : {
+                      backgroundColor: mounted && resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                      color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
+                    }
+              }
+              title={savedStatus === "watching" ? "Remove from list" : "In Progress"}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggle(item.type, item.id, "watching", item);
+              }}
+            >
+              <svg className="w-5 h-5" fill={savedStatus === "watching" ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5v14l11-7z" />
+              </svg>
+            </button>
+
             {/* Mark as Watched Button */}
             <button
               className={cn(
-                "w-12 h-12 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-110 hover:cursor-pointer",
+                "w-12 h-12 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm hover:cursor-pointer",
                 "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
-                "button-slide-up delay-2 media-card-button",
-                showButtons && "show"
+                "button-slide-up delay-3 media-card-button",
               )}
               style={
                 savedStatus === "watched"
@@ -364,76 +373,23 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
                       color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
                     }
               }
-              title={savedStatus === "watched" ? "Remove from list" : (item.type === "book" ? "Mark as read" : "Mark as watched")}
+              title={savedStatus === "watched" ? "Remove from list" : "Completed"}
               onClick={(e) => {
                 e.stopPropagation();
                 toggle(item.type, item.id, "watched", item);
               }}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
             </button>
-          
-          {/* Details Button */}
-          <button
-            className={cn(
-              "w-12 h-12 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-110 hover:cursor-pointer",
-              "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
-              "button-slide-up delay-3 media-card-button",
-              showButtons && "show"
-            )}
-            style={{
-              backgroundColor: mounted && resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
-              color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
-            }}
-            title="View Details"
-            onClick={(e) => {
-              e.stopPropagation();
-              openModal(item);
-            }}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </button>
+          </div>
         </div>
-      </div>
-        
-        {/* Mobile Touch Indicator - always show on mobile when buttons are hidden */}
-        {!showButtons && (
-          <div className="absolute bottom-3 right-3 bg-black/60 text-white px-2 py-1 rounded-lg text-xs backdrop-blur-sm opacity-70 sm:hidden">
-            Tap for options
-          </div>
-        )}
 
-        {/* Mobile Button Placeholders - show invisible clickable areas when buttons are hidden */}
-        {!showButtons && (
-          <div className="absolute inset-0 flex items-center justify-center sm:hidden">
-            <div className="flex flex-col space-y-3">
-              {/* Invisible clickable areas for each button */}
-              <div 
-                className="w-12 h-12 rounded-full cursor-pointer"
-                onClick={() => setShowButtons(true)}
-              />
-              <div 
-                className="w-12 h-12 rounded-full cursor-pointer"
-                onClick={() => setShowButtons(true)}
-              />
-              <div 
-                className="w-12 h-12 rounded-full cursor-pointer"
-                onClick={() => setShowButtons(true)}
-              />
-            </div>
-          </div>
-        )}
-        
-        {/* Title on hover */}
+        {/* Title - hover-revealed on desktop only */}
         <div className={cn(
-          "absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent",
-          "opacity-0 group-hover:opacity-100", // Desktop hover
-          showButtons ? "opacity-100" : "", // Mobile tap state
+          "absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent transition-opacity duration-300 ease-out",
+          "opacity-0 group-hover:opacity-100",
         )}>
           <h3 className="text-white text-sm font-semibold line-clamp-1">
             {getTitle()}
