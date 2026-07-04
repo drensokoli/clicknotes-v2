@@ -597,23 +597,37 @@ body {
   --btn-scale: 1.1;
 }
 
-/* Desktop hover animations - staggered reveal when the card (not just the button) is hovered */
-.group:hover .button-slide-up.delay-1 {
+/* Desktop hover animations - staggered reveal when the card (not just the button) is
+   hovered. `.buttons-visible` is the mobile equivalent - a class toggled by JS (tap on
+   the card) rather than real :hover, since mobile browsers often simulate :hover on the
+   first tap without registering it as a real click. Both triggers share the same
+   staggered reveal. */
+.group:hover .button-slide-up.delay-1,
+.buttons-visible .button-slide-up.delay-1 {
   --slide-y: 0px;
   opacity: 1;
   transition-delay: 0ms;
 }
 
-.group:hover .button-slide-up.delay-2 {
+.group:hover .button-slide-up.delay-2,
+.buttons-visible .button-slide-up.delay-2 {
   --slide-y: 0px;
   opacity: 1;
   transition-delay: 60ms;
 }
 
-.group:hover .button-slide-up.delay-3 {
+.group:hover .button-slide-up.delay-3,
+.buttons-visible .button-slide-up.delay-3 {
   --slide-y: 0px;
   opacity: 1;
   transition-delay: 120ms;
+}
+
+.group:hover .button-slide-up.delay-4,
+.buttons-visible .button-slide-up.delay-4 {
+  --slide-y: 0px;
+  opacity: 1;
+  transition-delay: 180ms;
 }
 
 /* Smooth scrolling */
