@@ -9,6 +9,7 @@ import { authOptions } from "@/lib/auth";
 import { Analytics } from "@vercel/analytics/next"
 import Footer from "@/components/footer"
 import { PWAInstallToast } from "@/components/pwa-install-toast"
+import { Toaster } from "@/components/ui/sonner"
 
 export const metadata: Metadata = {
   title: "ClickNotes",
@@ -73,6 +74,7 @@ export default async function RootLayout({
             </SavedMediaProvider>
             <Footer />
             <PWAInstallToast />
+            <Toaster />
           </ThemeProvider>
         </AuthProvider>
       </body>

@@ -1,5 +1,6 @@
 import clientPromise from "@/lib/mongodb"
 import type { Collection } from "mongodb"
+import { splitBookCategories } from "./book-categories"
 
 const db = process.env.MONGODB_DB_NAME || "clicknotes"
 const COLLECTION = "savedMedia"
@@ -150,7 +151,7 @@ export function toSlimCard(mediaType: MediaType, card: SavedCard): SavedCard {
       description: vi.description,
       publishedDate: vi.publishedDate,
       averageRating: vi.averageRating,
-      categories: vi.categories,
+      categories: splitBookCategories(vi.categories),
       pageCount: vi.pageCount,
       imageLinks: { thumbnail: vi.imageLinks?.thumbnail ?? null },
     },

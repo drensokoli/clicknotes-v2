@@ -1,9 +1,9 @@
 "use client"
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react"
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { X } from "lucide-react"
+import { toast } from "sonner"
 
 export type MediaType = "movie" | "series" | "book"
 export type SavedStatus = "to_watch" | "watching" | "watched"
@@ -44,16 +44,6 @@ function extractTitle(item: unknown): string {
   return "Item"
 }
 
-interface PendingUndo {
-  type: MediaType
-  id: string | number
-  status: SavedStatus // the status it had right before removal
-  item: unknown
-  title: string
-}
-
-const UNDO_TIMEOUT_MS = 6000
-
 export function SavedMediaProvider({ children }: { children: ReactNode }) {
   const { status: sessionStatus } = useSession()
   const router = useRouter()
@@ -62,19 +52,6 @@ export function SavedMediaProvider({ children }: { children: ReactNode }) {
   // Map of "type:id" -> status for the current user's saved items.
   const [statusMap, setStatusMap] = useState<Record<string, SavedStatus>>({})
   const [isLoaded, setIsLoaded] = useState(false)
-
-  // Toast shown only when an item is fully removed (not on ordinary status changes).
-  const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null)
-  const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const clearUndoTimer = useCallback(() => {
-    if (undoTimeoutRef.current) {
-      clearTimeout(undoTimeoutRef.current)
-      undoTimeoutRef.current = null
-    }
-  }, [])
-
-  useEffect(() => clearUndoTimer, [clearUndoTimer])
 
   // Load the user's saved keys once when they become authenticated.
   useEffect(() => {
@@ -162,9 +139,13 @@ export function SavedMediaProvider({ children }: { children: ReactNode }) {
         })
 
         if (isRemoval && (data.status === null || data.status === undefined) && current) {
-          clearUndoTimer()
-          setPendingUndo({ type, id, status: current, item, title: extractTitle(item) })
-          undoTimeoutRef.current = setTimeout(() => setPendingUndo(null), UNDO_TIMEOUT_MS)
+          const title = extractTitle(item)
+          toast(`Removed "${title}" from your library`, {
+            duration: 5000,
+            // Re-inserts, since the item is currently absent (toggling an absent item
+            // with a given status inserts it - see the predicted-status logic above).
+            action: { label: "Undo", onClick: () => toggle(type, id, current, item) },
+          })
         }
       } catch (error) {
         console.error("Failed to toggle saved media:", error)
@@ -177,41 +158,12 @@ export function SavedMediaProvider({ children }: { children: ReactNode }) {
         })
       }
     },
-    [isAuthenticated, statusMap, router, clearUndoTimer],
+    [isAuthenticated, statusMap, router],
   )
-
-  const undoRemoval = useCallback(() => {
-    if (!pendingUndo) return
-    const { type, id, status, item } = pendingUndo
-    clearUndoTimer()
-    setPendingUndo(null)
-    // Re-inserts, since the item is currently absent (toggling an absent item with a
-    // given status inserts it - see toggle()'s predicted-status logic above).
-    toggle(type, id, status, item)
-  }, [pendingUndo, clearUndoTimer, toggle])
 
   return (
     <SavedMediaContext.Provider value={{ getStatus, toggle, isAuthenticated, isLoaded }}>
       {children}
-
-      {pendingUndo && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[70] flex items-center gap-3 bg-surface-elevated text-foreground border border-border/40 px-4 py-3 rounded-lg shadow-2xl text-sm max-w-[calc(100vw-2rem)]">
-          <span className="truncate">Removed &ldquo;{pendingUndo.title}&rdquo; from your library</span>
-          <button
-            onClick={undoRemoval}
-            className="font-semibold text-primary hover:underline whitespace-nowrap hover:cursor-pointer"
-          >
-            Undo
-          </button>
-          <button
-            onClick={() => { clearUndoTimer(); setPendingUndo(null) }}
-            className="text-muted-foreground hover:text-foreground hover:cursor-pointer"
-            aria-label="Dismiss"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
     </SavedMediaContext.Provider>
   )
 }

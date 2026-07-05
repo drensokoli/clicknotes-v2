@@ -126,16 +126,18 @@ export function UserProfile() {
             </p>
           </div>
 
+          {/* No profile page exists yet - this went nowhere, so it's disabled until
+              there's somewhere for it to link to.
           <button
             onClick={() => {
               setIsDropdownOpen(false)
-              // Add profile navigation here
             }}
             className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
           >
             <UserCircle className="w-4 h-4 mr-3" />
             Profile
           </button>
+          */}
 
           <Link
             href="/library"

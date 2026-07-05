@@ -167,7 +167,7 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
             </div>
             <button
               onClick={() => setShuffleOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-elevated text-foreground text-sm font-medium hover:bg-surface-tonal transition-colors hover:cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-elevated text-foreground text-sm font-medium hover:bg-border transition-colors hover:cursor-pointer"
             >
               <ShuffleIcon className="w-4 h-4" />
               Shuffle
@@ -226,7 +226,7 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
               onErasChange={setSelectedEras}
             />
 
-            <div ref={gridScrollRef} className="flex-1 min-w-0 md:h-full md:overflow-y-auto md:pr-1">
+            <div ref={gridScrollRef} className="flex-1 min-w-0 md:h-full md:overflow-y-auto md:pr-3">
               {visibleItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-24 text-center">
                   <p className="text-muted-foreground text-lg mb-2">

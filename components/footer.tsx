@@ -7,9 +7,9 @@ const Footer: React.FC = () => {
       <div className="text-muted-foreground *:[a]:hover:text-primary text-center text-xs text-balance *:[a]:underline *:[a]:underline-offset-4">
         Made with ❤️ by{" "}
         <Link
-          href="https://linktr.ee/drensokoli"
+          href="https://drensokoli.com"
           target="_blank"
-          aria-label="Dren Sokoli Linktree Profile"
+          aria-label="Dren Sokoli Web Portfolio"
         >
           Dren Sokoli
         </Link>

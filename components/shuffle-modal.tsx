@@ -4,9 +4,8 @@ import { useState, useMemo, useCallback } from "react"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Shuffle as ShuffleIcon, Sparkles } from "lucide-react"
-import { useModal } from "./modal-provider"
 import type { MediaType, SavedStatus } from "./saved-media-provider"
-import type { MediaItem } from "./media-card"
+import { MediaCard, type MediaItem } from "./media-card"
 import {
   type SavedItem,
   getRating,
@@ -49,11 +48,15 @@ const RUNTIME_MAX = 240
 const PAGES_MIN = 100
 const PAGES_MAX = 1000
 
-const CARD_WIDTH = 128 // px, including gap - keep in sync with the strip item's className
+// Must match the strip item's className (w-28 = 112px) and the strip container's
+// gap-3 (12px) - used to compute exactly where a card's center lands relative to
+// the fixed viewport-center indicator. A mismatch here is what causes the spin to
+// visually land on the wrong card.
+const CARD_WIDTH = 112
+const CARD_GAP = 12
+const CARD_PITCH = CARD_WIDTH + CARD_GAP
 
 export function ShuffleModal({ items, defaultStatus, initialType, initialGenres, initialEras, onClose }: ShuffleModalProps) {
-  const { openModal } = useModal()
-
   const [phase, setPhase] = useState<"filter" | "spinning" | "result">("filter")
   const [typeFilter, setTypeFilter] = useState<MediaType>(initialType)
   const [statusFilter, setStatusFilter] = useState<SavedStatus>(defaultStatus)
@@ -107,26 +110,24 @@ export function ShuffleModal({ items, defaultStatus, initialType, initialGenres,
   const startShuffle = useCallback(() => {
     if (filteredItems.length === 0) return
 
-    const REPEATS = 8
+    const REPEATS = 12
+    // Land a few repetitions before the end (not the very last one) so there's
+    // always a couple of full list-lengths of cards still visible after the
+    // landing point, however far into `filteredItems` the chosen item sits -
+    // otherwise the strip could visibly run out right after landing.
+    const BUFFER_REPEATS_AFTER = 3
     const chosen = filteredItems[Math.floor(Math.random() * filteredItems.length)]
 
-    // Repeat the filtered list enough times to fake a long spin, landing the LAST
-    // repetition's copy of the chosen item roughly in the middle-to-end of the strip.
     const longStrip: SavedItem[] = []
     for (let r = 0; r < REPEATS; r++) longStrip.push(...filteredItems)
-    const landingIndex = (REPEATS - 1) * filteredItems.length + filteredItems.indexOf(chosen)
+    const landingRepetition = REPEATS - BUFFER_REPEATS_AFTER
+    const landingIndex = landingRepetition * filteredItems.length + filteredItems.indexOf(chosen)
 
     setStrip(longStrip)
     setTargetIndex(landingIndex)
     setResult(chosen)
     setPhase("spinning")
   }, [filteredItems])
-
-  const handleViewDetails = () => {
-    if (!result) return
-    onClose()
-    openModal(result.card as unknown as MediaItem)
-  }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -145,7 +146,11 @@ export function ShuffleModal({ items, defaultStatus, initialType, initialGenres,
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ duration: 0.2 }}
       >
-        <div className="flex items-center justify-end px-5 sm:px-6 py-3 border-b border-border/30">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3 border-b border-border/30">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+            <ShuffleIcon className="w-4 h-4" />
+            Shuffle
+          </h2>
           {phase !== "spinning" && (
             <button
               onClick={onClose}
@@ -177,7 +182,7 @@ export function ShuffleModal({ items, defaultStatus, initialType, initialGenres,
                         setSelectedGenres(new Set())
                         setSelectedEras(new Set())
                       }}
-                      className={pillClass(typeFilter === opt.key, "bg-foreground text-background")}
+                      className={pillClass(typeFilter === opt.key)}
                     >
                       {opt.label}
                     </button>
@@ -274,12 +279,11 @@ export function ShuffleModal({ items, defaultStatus, initialType, initialGenres,
               className="p-5 sm:p-6"
             >
               <div className="relative h-48 overflow-hidden rounded-lg bg-surface-elevated">
-                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-1 bg-primary z-10" />
                 <motion.div
-                  className="absolute inset-y-0 flex items-center gap-3 px-3"
+                  className="absolute inset-y-0 flex items-center gap-3"
                   style={{ left: "50%" }}
                   initial={{ x: -(CARD_WIDTH / 2) }}
-                  animate={{ x: -(targetIndex * CARD_WIDTH + CARD_WIDTH / 2) }}
+                  animate={{ x: -(targetIndex * CARD_PITCH + CARD_WIDTH / 2) }}
                   transition={{ duration: 4, ease: [0.11, 0.83, 0.24, 1] }}
                   onAnimationComplete={() => setPhase("result")}
                 >
@@ -308,28 +312,23 @@ export function ShuffleModal({ items, defaultStatus, initialType, initialGenres,
               className="p-5 sm:p-6 flex flex-col items-center text-center"
             >
               <Sparkles className="w-5 h-5 text-primary mb-2" />
-              <div className="relative w-32 h-48 rounded-lg overflow-hidden bg-surface-tonal shadow-lg mb-4">
-                {getPosterUrl(result) ? (
-                  <Image src={getPosterUrl(result)!} alt={getTitle(result)} fill sizes="128px" className="object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground p-2">
-                    {getTitle(result)}
-                  </div>
-                )}
+              {/* Same card used in the popular/library grids (poster, rating, Info
+                  button, status buttons) - sized like a library grid card. */}
+              <div className="w-44 mb-4 shadow-lg rounded-lg overflow-hidden">
+                <MediaCard item={result.card as unknown as MediaItem} />
               </div>
-              <h3 className="text-lg font-semibold text-foreground mb-4">{getTitle(result)}</h3>
               <div className="flex gap-2 w-full">
                 <button
                   onClick={() => setPhase("filter")}
-                  className="flex-1 px-4 py-2 bg-surface-elevated text-foreground rounded-lg font-medium text-sm hover:bg-surface-tonal transition-colors hover:cursor-pointer"
+                  className="flex-1 px-4 py-2 bg-surface-elevated text-foreground rounded-lg font-medium text-sm hover:bg-border transition-colors hover:cursor-pointer"
                 >
-                  Shuffle again
+                  Back
                 </button>
                 <button
-                  onClick={handleViewDetails}
+                  onClick={startShuffle}
                   className="flex-1 px-4 py-2 bg-primary text-white rounded-lg font-medium text-sm hover:bg-blue-800 transition-colors hover:cursor-pointer"
                 >
-                  View details
+                  Shuffle again
                 </button>
               </div>
             </motion.div>

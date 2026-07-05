@@ -43,7 +43,7 @@ export function ScrollToTopButton({ target, threshold = 400 }: ScrollToTopButton
     <button
       onClick={scrollToTop}
       aria-label="Scroll to top"
-      className="fixed bottom-6 right-6 z-40 w-10 h-10 rounded-full bg-surface-elevated border border-border/40 shadow-lg flex items-center justify-center text-foreground hover:bg-surface-tonal transition-colors hover:cursor-pointer"
+      className="fixed bottom-6 right-6 z-40 w-10 h-10 rounded-full bg-surface-elevated border border-border/40 shadow-lg flex items-center justify-center text-foreground hover:bg-border transition-colors hover:cursor-pointer"
     >
       <ArrowUp className="w-4 h-4" />
     </button>

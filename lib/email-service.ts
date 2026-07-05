@@ -101,6 +101,50 @@ export const emailTemplates = {
     `
   }),
 
+  v2Launch: (userName: string, appUrl: string) => ({
+    subject: 'ClickNotes v2 is here',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
+        <h2 style="color: #2563eb;">ClickNotes v2 is here</h2>
+        <p>Hi ${userName},</p>
+        <p>We've just launched a new version of ClickNotes, and your library is already waiting for you - no setup needed.</p>
+        <p>What's new:</p>
+        <ul style="padding-left: 20px; line-height: 1.7;">
+          <li><strong>No more Notion required.</strong> Your movies, TV series, and books now live directly in ClickNotes - just sign in and everything is there.</li>
+          <li><strong>A real Library page.</strong> Browse everything you've saved, filter by type, status, genre, or era, and search your whole collection instantly.</li>
+          <li><strong>Shuffle.</strong> Not sure what to watch or read next? Shuffle picks something for you from your saved list, using whatever filters you choose.</li>
+          <li><strong>Faster browsing.</strong> Discover popular movies, series, and books with instant search and infinite scroll.</li>
+        </ul>
+        <p>Everything you had saved has already been carried over automatically.</p>
+        <a href="${appUrl}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0;">Try ClickNotes v2</a>
+        <p>Thanks for being an early ClickNotes user - we hope you enjoy the new version.</p>
+        <p>Best regards,<br>The ClickNotes Team</p>
+      </div>
+    `,
+    text: `
+      ClickNotes v2 is here
+
+      Hi ${userName},
+
+      We've just launched a new version of ClickNotes, and your library is already waiting for you - no setup needed.
+
+      What's new:
+      - No more Notion required. Your movies, TV series, and books now live directly in ClickNotes - just sign in and everything is there.
+      - A real Library page. Browse everything you've saved, filter by type, status, genre, or era, and search your whole collection instantly.
+      - Shuffle. Not sure what to watch or read next? Shuffle picks something for you from your saved list, using whatever filters you choose.
+      - Faster browsing. Discover popular movies, series, and books with instant search and infinite scroll.
+
+      Everything you had saved has already been carried over automatically.
+
+      Try it now: ${appUrl}
+
+      Thanks for being an early ClickNotes user - we hope you enjoy the new version.
+
+      Best regards,
+      The ClickNotes Team
+    `
+  }),
+
   emailVerification: (verificationLink: string, userName: string) => ({
     subject: 'Verify Your ClickNotes Email',
     html: `

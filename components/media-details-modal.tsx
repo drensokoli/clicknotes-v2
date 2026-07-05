@@ -7,6 +7,7 @@ import { useModal } from "./modal-provider"
 import { useSavedMedia } from "./saved-media-provider"
 import { useEffect, useState } from "react"
 import { fetchMovieDetails, fetchTVDetails, getGenreNames, getYouTubeTrailer, type MovieDetails, type TVDetails } from "@/lib/tmdb-details"
+import { splitBookCategories } from "@/lib/book-categories"
 import { motion, AnimatePresence } from "framer-motion"
 
 interface MediaDetailsModalProps {
@@ -251,7 +252,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
   const getGenres = () => {
     // For books, always use categories from volumeInfo
     if (item.type === 'book' && 'volumeInfo' in item) {
-      return item.volumeInfo.categories || []
+      return splitBookCategories(item.volumeInfo.categories)
     }
 
     // For movies/TV, use detailed data if available
@@ -349,7 +350,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       {/* Backdrop */}
       <AnimatePresence>
         {isModalOpen && (

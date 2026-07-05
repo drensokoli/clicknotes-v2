@@ -1,5 +1,7 @@
 // Data optimization utilities for reducing Redis payload size
 
+import { splitBookCategories } from "./book-categories"
+
 export interface OptimizedMovie {
   id: number;
   title: string;
@@ -404,7 +406,7 @@ export function optimizeBookData(book: RawBook): OptimizedBook {
       infoLink: book.volumeInfo?.infoLink,
       language: book.volumeInfo?.language,
       publisher: book.volumeInfo?.publisher,
-      categories: book.volumeInfo?.categories
+      categories: splitBookCategories(book.volumeInfo?.categories)
     }
   };
 

@@ -60,7 +60,7 @@ function FilterGroups({
               key={f.key}
               onClick={() => onTypeChange(f.key)}
               className={`px-3 py-2 rounded-lg text-sm font-medium text-left transition-colors hover:cursor-pointer ${
-                typeFilter === f.key ? "bg-foreground text-background" : "bg-surface-elevated text-muted-foreground hover:text-foreground"
+                typeFilter === f.key ? "bg-primary text-white" : "bg-surface-elevated text-muted-foreground hover:text-foreground"
               }`}
             >
               {f.label}
@@ -103,14 +103,14 @@ export function LibraryFilters(props: LibraryFiltersProps) {
       {/* Desktop sidebar - its parent row is height-capped (see saved-list.tsx),
           so this scrolls independently of the grid instead of the whole page
           scrolling both together. */}
-      <aside className="hidden md:block w-56 shrink-0 md:h-full md:overflow-y-auto pr-1">
+      <aside className="hidden md:block w-56 shrink-0 md:h-full md:overflow-y-auto pr-3">
         <FilterGroups {...props} />
       </aside>
 
       {/* Mobile trigger */}
       <button
         onClick={() => setDrawerOpen(true)}
-        className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-elevated text-foreground text-sm font-medium hover:bg-surface-tonal transition-colors hover:cursor-pointer"
+        className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-elevated text-foreground text-sm font-medium hover:bg-border transition-colors hover:cursor-pointer"
       >
         <SlidersHorizontal className="w-4 h-4" />
         Filters

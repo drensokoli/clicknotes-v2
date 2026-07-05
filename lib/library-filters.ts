@@ -1,6 +1,7 @@
 import type { MediaType, SavedStatus } from "@/components/saved-media-provider"
 import type { SavedCard } from "@/lib/saved-media"
 import { MOVIE_GENRES, TV_GENRES } from "@/lib/tmdb-details"
+import { splitBookCategories } from "@/lib/book-categories"
 
 // Shared by the Library sidebar (components/library-filters.tsx + saved-list.tsx)
 // and the Shuffle modal (components/shuffle-modal.tsx) so both compute the same
@@ -16,7 +17,9 @@ export interface SavedItem {
 // --- helpers to read display fields uniformly across the 3 media types ---
 
 export function getGenres(item: SavedItem): string[] {
-  if (item.mediaType === "book") return item.card.volumeInfo?.categories ?? []
+  // Defensive: also splits any pre-existing un-split "X / Y" categories still on
+  // disk from before scripts/backfill-book-categories.js ran.
+  if (item.mediaType === "book") return splitBookCategories(item.card.volumeInfo?.categories)
 
   // Prefer the full genre objects from `details.genres` (from the expensive
   // per-item TMDB detail fetch during population) when present, but fall back to
