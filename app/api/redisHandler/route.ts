@@ -21,12 +21,12 @@ const createRedisClient = () => {
   })
 }
 
-// Fetch minimal v2 cards by range: ?type=v2-range&mediaType=movies|tvshows|books&start=0&end=19
+// Fetch minimal cards by range: ?type=range&mediaType=movies|series|books&start=0&end=19
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const type = searchParams.get('type')
 
-  if (type !== 'v2-range') {
+  if (type !== 'range') {
     return NextResponse.json({ success: false, error: 'Unsupported type' }, { status: 400 })
   }
 
@@ -55,18 +55,32 @@ export async function GET(request: NextRequest) {
     }
 
     const keyByMediaType: Record<string, string> = {
-      movies: 'movies_v2',
-      tvshows: 'tvshows_v2',
-      books: 'books_v2',
+      movies: 'movies',
+      series: 'series',
+      books: 'books',
+    }
+    // Legacy "_v2"-suffixed keys (and the pre-rename "tvshows_v2") from before the
+    // Redis key rename - fall back to these until the next cron population (or
+    // scripts/migrate-tvshow-to-series.js) has written the un-suffixed key.
+    const legacyKeyByMediaType: Record<string, string[]> = {
+      movies: ['movies_v2'],
+      series: ['series_v2', 'tvshows_v2'],
+      books: ['books_v2'],
     }
 
-    const v2Key = keyByMediaType[mediaType]
-    if (!v2Key) {
+    const key = keyByMediaType[mediaType]
+    if (!key) {
       return NextResponse.json({ success: false, error: 'Invalid mediaType' }, { status: 400 })
     }
 
     await client.connect()
-    const stored = await client.get(v2Key)
+    let stored = await client.get(key)
+    if (!stored) {
+      for (const legacyKey of legacyKeyByMediaType[mediaType] ?? []) {
+        stored = await client.get(legacyKey)
+        if (stored) break
+      }
+    }
 
     if (!stored) {
       return NextResponse.json({ success: true, items: [], count: 0, start, end })
@@ -76,7 +90,7 @@ export async function GET(request: NextRequest) {
     try {
       parsed = JSON.parse(stored)
     } catch {
-      return NextResponse.json({ success: false, error: 'Stored v2 data is not valid JSON' }, { status: 500 })
+      return NextResponse.json({ success: false, error: 'Stored data is not valid JSON' }, { status: 500 })
     }
 
     const items = Array.isArray(parsed) ? parsed.slice(start, end + 1) : []
@@ -89,7 +103,7 @@ export async function GET(request: NextRequest) {
       end,
     })
   } catch (error) {
-    console.error('❌ Error fetching v2 range:', error)
+    console.error('❌ Error fetching range:', error)
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : String(error) },
       { status: 500 }

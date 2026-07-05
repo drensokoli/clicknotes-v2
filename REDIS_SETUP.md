@@ -1,6 +1,6 @@
-# Redis Setup for ClickNotes v2
+# Redis Setup for ClickNotes
 
-This document explains how to set up and use Redis caching for ClickNotes v2 to improve performance and reduce API rate limiting.
+This document explains how to set up and use Redis caching for ClickNotes to improve performance and reduce API rate limiting.
 
 ## Overview
 

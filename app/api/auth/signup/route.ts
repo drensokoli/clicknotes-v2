@@ -5,7 +5,7 @@ import { sendEmail, emailTemplates, EmailConfig } from "@/lib/email-service"
 import crypto from "crypto"
 import { validateSignup } from "@/lib/validation"
 
-const db = process.env.MONGODB_DB_NAME || "clicknotes-v2"
+const db = process.env.MONGODB_DB_NAME || "clicknotes"
 
 export async function POST(request: NextRequest) {
           try {

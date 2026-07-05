@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { X } from "lucide-react"
 
-export type MediaType = "movie" | "tvshow" | "book"
+export type MediaType = "movie" | "series" | "book"
 export type SavedStatus = "to_watch" | "watching" | "watched"
 
 // The full card item to persist. Typed as `unknown` here (rather than importing
@@ -195,7 +195,7 @@ export function SavedMediaProvider({ children }: { children: ReactNode }) {
       {children}
 
       {pendingUndo && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[70] flex items-center gap-3 bg-foreground text-background px-4 py-3 rounded-lg shadow-2xl text-sm max-w-[calc(100vw-2rem)]">
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[70] flex items-center gap-3 bg-surface-elevated text-foreground border border-border/40 px-4 py-3 rounded-lg shadow-2xl text-sm max-w-[calc(100vw-2rem)]">
           <span className="truncate">Removed &ldquo;{pendingUndo.title}&rdquo; from your library</span>
           <button
             onClick={undoRemoval}
@@ -205,7 +205,7 @@ export function SavedMediaProvider({ children }: { children: ReactNode }) {
           </button>
           <button
             onClick={() => { clearUndoTimer(); setPendingUndo(null) }}
-            className="text-background/60 hover:text-background hover:cursor-pointer"
+            className="text-muted-foreground hover:text-foreground hover:cursor-pointer"
             aria-label="Dismiss"
           >
             <X className="w-4 h-4" />

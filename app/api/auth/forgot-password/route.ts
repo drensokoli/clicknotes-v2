@@ -3,7 +3,7 @@ import clientPromise from "@/lib/mongodb"
 import crypto from "crypto"
 import { sendEmail, emailTemplates, EmailConfig } from "@/lib/email-service"
 
-const db = process.env.MONGODB_DB_NAME || "clicknotes-v2"
+const db = process.env.MONGODB_DB_NAME || "clicknotes"
 
 export async function POST(request: NextRequest) {
   try {

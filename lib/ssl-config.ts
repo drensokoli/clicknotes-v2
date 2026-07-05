@@ -66,7 +66,7 @@ export function getFetchOptionsWithSSL(options: RequestInit = {}): RequestInit {
     headers: {
       ...options.headers,
       'Accept': 'application/json',
-      'User-Agent': 'ClickNotes-v2/1.0.0',
+      'User-Agent': 'ClickNotes/1.0.0',
     },
   };
 }

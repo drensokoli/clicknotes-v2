@@ -6,28 +6,35 @@ import { motion, AnimatePresence } from "framer-motion"
 import { X, Shuffle as ShuffleIcon, Sparkles } from "lucide-react"
 import { useModal } from "./modal-provider"
 import type { MediaType, SavedStatus } from "./saved-media-provider"
-import type { SavedCard } from "@/lib/saved-media"
 import type { MediaItem } from "./media-card"
-
-interface SavedItem {
-  mediaType: MediaType
-  mediaId: string
-  status: SavedStatus
-  card: SavedCard
-}
+import {
+  type SavedItem,
+  getRating,
+  getTitle,
+  getPosterUrl,
+  getRuntime,
+  getPageCount,
+  decadeLabel,
+  computeAvailableGenres,
+  computeAvailableEras,
+  matchesGenres,
+  matchesEras,
+  pillClass,
+} from "@/lib/library-filters"
+import { PillGroup } from "./pill-group"
 
 interface ShuffleModalProps {
   items: SavedItem[]
   defaultStatus: SavedStatus
+  initialType: MediaType
+  initialGenres?: Set<string>
+  initialEras?: Set<number>
   onClose: () => void
 }
 
-type TypeFilter = "all" | MediaType
-
-const TYPE_OPTIONS: { key: TypeFilter; label: string }[] = [
-  { key: "all", label: "All" },
+const TYPE_OPTIONS: { key: MediaType; label: string }[] = [
   { key: "movie", label: "Movies" },
-  { key: "tvshow", label: "TV shows" },
+  { key: "series", label: "Series" },
   { key: "book", label: "Books" },
 ]
 
@@ -37,94 +44,60 @@ const STATUS_OPTIONS: { key: SavedStatus; label: string }[] = [
   { key: "watched", label: "Completed" },
 ]
 
-// --- helpers to read display fields uniformly across the 3 media types ---
-
-function getGenres(item: SavedItem): string[] {
-  if (item.mediaType === "book") return item.card.volumeInfo?.categories ?? []
-  return item.card.details?.genres?.map((g) => g.name) ?? []
-}
-
-function getYear(item: SavedItem): number | null {
-  const dateStr =
-    item.mediaType === "book"
-      ? item.card.volumeInfo?.publishedDate
-      : item.mediaType === "movie"
-        ? item.card.release_date
-        : item.card.first_air_date
-  if (!dateStr) return null
-  const year = parseInt(dateStr.slice(0, 4), 10)
-  return Number.isFinite(year) ? year : null
-}
-
-// Normalized to a 0-10 scale (Google Books averages are out of 5, TMDB out of 10).
-function getRating(item: SavedItem): number | null {
-  if (item.mediaType === "book") {
-    const r = item.card.volumeInfo?.averageRating
-    return typeof r === "number" ? r * 2 : null
-  }
-  return typeof item.card.vote_average === "number" ? item.card.vote_average : null
-}
-
-function getTitle(item: SavedItem): string {
-  if (item.mediaType === "book") return item.card.volumeInfo?.title || "Untitled"
-  return item.card.title || item.card.name || "Untitled"
-}
-
-function getPosterUrl(item: SavedItem): string | null {
-  if (item.mediaType === "book") {
-    const thumb = item.card.volumeInfo?.imageLinks?.thumbnail
-    return thumb ? thumb.replace("http:", "https:") : null
-  }
-  return item.card.poster_path ? `https://image.tmdb.org/t/p/w342${item.card.poster_path}` : null
-}
+const RUNTIME_MIN = 60
+const RUNTIME_MAX = 240
+const PAGES_MIN = 100
+const PAGES_MAX = 1000
 
 const CARD_WIDTH = 128 // px, including gap - keep in sync with the strip item's className
 
-export function ShuffleModal({ items, defaultStatus, onClose }: ShuffleModalProps) {
+export function ShuffleModal({ items, defaultStatus, initialType, initialGenres, initialEras, onClose }: ShuffleModalProps) {
   const { openModal } = useModal()
 
   const [phase, setPhase] = useState<"filter" | "spinning" | "result">("filter")
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all")
+  const [typeFilter, setTypeFilter] = useState<MediaType>(initialType)
   const [statusFilter, setStatusFilter] = useState<SavedStatus>(defaultStatus)
-  const [genreFilter, setGenreFilter] = useState<string>("all")
+  // Seeded from whatever the Library sidebar has active (one-way - editing here
+  // doesn't write back to the Library's own filter state).
+  const [selectedGenres, setSelectedGenres] = useState<Set<string>>(() => new Set(initialGenres))
+  const [selectedEras, setSelectedEras] = useState<Set<number>>(() => new Set(initialEras))
   const [minRating, setMinRating] = useState(0)
+  const [maxRuntime, setMaxRuntime] = useState(RUNTIME_MAX)
+  const [maxPages, setMaxPages] = useState(PAGES_MAX)
 
   const typeMatched = useMemo(
-    () => items.filter((i) => typeFilter === "all" || i.mediaType === typeFilter),
+    () => items.filter((i) => i.mediaType === typeFilter),
     [items, typeFilter],
   )
 
-  const availableYears = useMemo(() => {
-    const years = typeMatched.map(getYear).filter((y): y is number => y !== null)
-    if (years.length === 0) return { min: 1900, max: new Date().getFullYear() }
-    return { min: Math.min(...years), max: Math.max(...years) }
-  }, [typeMatched])
-
-  const [yearRange, setYearRange] = useState<[number, number] | null>(null)
-  const effectiveYearRange = useMemo(
-    () => yearRange ?? [availableYears.min, availableYears.max],
-    [yearRange, availableYears],
-  )
-
-  const availableGenres = useMemo(() => {
-    const set = new Set<string>()
-    for (const item of typeMatched) {
-      for (const g of getGenres(item)) set.add(g)
-    }
-    return Array.from(set).sort()
-  }, [typeMatched])
+  // Genre/era pills reflect whatever the user has actually saved for the selected
+  // media type - no fixed canonical genre list, since a genre you've never
+  // saved anything in isn't a useful "mood" to shuffle from.
+  const availableGenres = useMemo(() => computeAvailableGenres(typeMatched), [typeMatched])
+  const availableEras = useMemo(() => computeAvailableEras(typeMatched), [typeMatched])
 
   const filteredItems = useMemo(() => {
     return typeMatched.filter((item) => {
       if (item.status !== statusFilter) return false
-      if (genreFilter !== "all" && !getGenres(item).includes(genreFilter)) return false
-      const year = getYear(item)
-      if (year !== null && (year < effectiveYearRange[0] || year > effectiveYearRange[1])) return false
+      if (!matchesGenres(item, selectedGenres)) return false
+      if (!matchesEras(item, selectedEras)) return false
+
       const rating = getRating(item)
       if (minRating > 0 && (rating === null || rating < minRating)) return false
+
+      if (typeFilter === "book") {
+        if (maxPages < PAGES_MAX) {
+          const pages = getPageCount(item)
+          if (pages !== null && pages > maxPages) return false
+        }
+      } else if (maxRuntime < RUNTIME_MAX) {
+        const runtime = getRuntime(item)
+        if (runtime !== null && runtime > maxRuntime) return false
+      }
+
       return true
     })
-  }, [typeMatched, statusFilter, genreFilter, effectiveYearRange, minRating])
+  }, [typeMatched, statusFilter, selectedGenres, selectedEras, minRating, maxRuntime, maxPages, typeFilter])
 
   // Built once we start spinning, so the strip doesn't re-shuffle mid-animation.
   const [strip, setStrip] = useState<SavedItem[]>([])
@@ -172,11 +145,7 @@ export function ShuffleModal({ items, defaultStatus, onClose }: ShuffleModalProp
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ duration: 0.2 }}
       >
-        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-border/30">
-          <h2 className="text-base sm:text-lg font-semibold text-foreground flex items-center gap-2">
-            <ShuffleIcon className="w-4 h-4" />
-            Shuffle
-          </h2>
+        <div className="flex items-center justify-end px-5 sm:px-6 py-3 border-b border-border/30">
           {phase !== "spinning" && (
             <button
               onClick={onClose}
@@ -203,10 +172,12 @@ export function ShuffleModal({ items, defaultStatus, onClose }: ShuffleModalProp
                   {TYPE_OPTIONS.map((opt) => (
                     <button
                       key={opt.key}
-                      onClick={() => { setTypeFilter(opt.key); setGenreFilter("all"); setYearRange(null) }}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors hover:cursor-pointer ${
-                        typeFilter === opt.key ? "bg-foreground text-background" : "bg-surface-elevated text-muted-foreground hover:text-foreground"
-                      }`}
+                      onClick={() => {
+                        setTypeFilter(opt.key)
+                        setSelectedGenres(new Set())
+                        setSelectedEras(new Set())
+                      }}
+                      className={pillClass(typeFilter === opt.key, "bg-foreground text-background")}
                     >
                       {opt.label}
                     </button>
@@ -222,9 +193,7 @@ export function ShuffleModal({ items, defaultStatus, onClose }: ShuffleModalProp
                     <button
                       key={opt.key}
                       onClick={() => setStatusFilter(opt.key)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors hover:cursor-pointer ${
-                        statusFilter === opt.key ? "bg-primary text-white" : "bg-surface-elevated text-muted-foreground hover:text-foreground"
-                      }`}
+                      className={pillClass(statusFilter === opt.key)}
                     >
                       {opt.label}
                     </button>
@@ -232,49 +201,8 @@ export function ShuffleModal({ items, defaultStatus, onClose }: ShuffleModalProp
                 </div>
               </div>
 
-              {/* Genre */}
-              {availableGenres.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Genre</h3>
-                  <select
-                    value={genreFilter}
-                    onChange={(e) => setGenreFilter(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-surface-elevated text-foreground text-sm border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  >
-                    <option value="all">All genres</option>
-                    {availableGenres.map((g) => (
-                      <option key={g} value={g}>{g}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Year range */}
-              {availableYears.min < availableYears.max && (
-                <div>
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                    Year: {effectiveYearRange[0]} - {effectiveYearRange[1]}
-                  </h3>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min={availableYears.min}
-                      max={availableYears.max}
-                      value={effectiveYearRange[0]}
-                      onChange={(e) => setYearRange([Math.min(Number(e.target.value), effectiveYearRange[1]), effectiveYearRange[1]])}
-                      className="w-full"
-                    />
-                    <input
-                      type="range"
-                      min={availableYears.min}
-                      max={availableYears.max}
-                      value={effectiveYearRange[1]}
-                      onChange={(e) => setYearRange([effectiveYearRange[0], Math.max(Number(e.target.value), effectiveYearRange[0])])}
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-              )}
+              <PillGroup label={"I'm in the mood for..."} options={availableGenres} selected={selectedGenres} onChange={setSelectedGenres} />
+              <PillGroup label="Era" options={availableEras} selected={selectedEras} onChange={setSelectedEras} renderLabel={decadeLabel} />
 
               {/* Minimum rating */}
               <div>
@@ -291,6 +219,39 @@ export function ShuffleModal({ items, defaultStatus, onClose }: ShuffleModalProp
                   className="w-full"
                 />
               </div>
+
+              {/* Max runtime / pages */}
+              {typeFilter === "book" ? (
+                <div>
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    Max pages: {maxPages >= PAGES_MAX ? "Any" : maxPages}
+                  </h3>
+                  <input
+                    type="range"
+                    min={PAGES_MIN}
+                    max={PAGES_MAX}
+                    step={50}
+                    value={maxPages}
+                    onChange={(e) => setMaxPages(Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    Max runtime: {maxRuntime >= RUNTIME_MAX ? "Any" : `${maxRuntime}m`}
+                  </h3>
+                  <input
+                    type="range"
+                    min={RUNTIME_MIN}
+                    max={RUNTIME_MAX}
+                    step={10}
+                    value={maxRuntime}
+                    onChange={(e) => setMaxRuntime(Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+              )}
 
               <div className="pt-2">
                 <button

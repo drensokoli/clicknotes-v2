@@ -1,22 +1,37 @@
 import clientPromise from "@/lib/mongodb"
 import type { Collection } from "mongodb"
 
-const db = process.env.MONGODB_DB_NAME || "clicknotes-v2"
+const db = process.env.MONGODB_DB_NAME || "clicknotes"
 const COLLECTION = "savedMedia"
 
-export type MediaType = "movie" | "tvshow" | "book"
+export type MediaType = "movie" | "series" | "book"
 export type SavedStatus = "to_watch" | "watching" | "watched"
+
+// Docs saved before the "tvshow" -> "series" rename still have the old value on
+// disk until scripts/migrate-tvshow-to-series.js has been run against them; treat
+// it as an alias on every read so nothing goes invisible mid-migration.
+function normalizeMediaType(value: string): MediaType {
+  return value === "tvshow" ? "series" : (value as MediaType)
+}
+
+function normalizeDoc(doc: SavedMediaDoc): SavedMediaDoc {
+  return {
+    ...doc,
+    mediaType: normalizeMediaType(doc.mediaType),
+    card: { ...doc.card, type: normalizeMediaType(doc.card.type) },
+  }
+}
 
 // Slim card snapshot — the fields MediaCard needs to render, plus a small trimmed
 // `details`/`omdbData`/`stremioLink` (runtime, genres, one trailer, imdbId/rated/awards)
-// mirroring what population embeds in movies_v2/tvshows_v2. This lets the detail modal's
+// mirroring what population embeds in movies/series Redis cards. This lets the detail modal's
 // existing "already have details+omdbData? skip the live fetch" check apply to saved
 // items too, so Library cards get instant Watch/Trailer buttons the same as browsing
 // cards. No cast/crew/full videos list here - that stays on-demand only.
 export interface SavedCard {
   id: number | string
   type: MediaType
-  // movie / tvshow
+  // movie / series
   title?: string
   name?: string
   overview?: string
@@ -25,6 +40,10 @@ export interface SavedCard {
   release_date?: string
   first_air_date?: string
   vote_average?: number
+  // Cheap genre signal always present on browsing cards (from TMDB's list endpoint),
+  // independent of whether the expensive per-item `details.genres` fetch succeeded -
+  // see getGenres() in lib/library-filters.ts for how these get turned into names.
+  genre_ids?: number[]
   details?: {
     runtime?: number
     genres?: Array<{ id: number; name: string }>
@@ -45,6 +64,7 @@ export interface SavedCard {
     publishedDate?: string
     averageRating?: number
     categories?: string[]
+    pageCount?: number
     imageLinks?: { thumbnail?: string | null }
   }
 }
@@ -81,7 +101,7 @@ export async function getSavedMediaCollection(): Promise<Collection<SavedMediaDo
 
 // Whitelist just the display + trimmed detail fields for the given media type. We still
 // never persist the heavy stuff (cast/crew, full videos list) - only what population
-// already trimmed down (see optimizeMovieData/optimizeTVShowData), preserved as-is if
+// already trimmed down (see optimizeMovieData/optimizeSeriesData), preserved as-is if
 // the incoming card carries it (e.g. saved straight from a browsing card that already
 // has it embedded).
 export function toSlimCard(mediaType: MediaType, card: SavedCard): SavedCard {
@@ -95,22 +115,24 @@ export function toSlimCard(mediaType: MediaType, card: SavedCard): SavedCard {
       backdrop_path: card.backdrop_path ?? null,
       release_date: card.release_date,
       vote_average: card.vote_average,
+      genre_ids: card.genre_ids,
       details: card.details,
       omdbData: card.omdbData,
       stremioLink: card.stremioLink,
     }
   }
 
-  if (mediaType === "tvshow") {
+  if (mediaType === "series") {
     return {
       id: card.id,
-      type: "tvshow",
+      type: "series",
       name: card.name,
       overview: card.overview,
       poster_path: card.poster_path ?? null,
       backdrop_path: card.backdrop_path ?? null,
       first_air_date: card.first_air_date,
       vote_average: card.vote_average,
+      genre_ids: card.genre_ids,
       details: card.details,
       omdbData: card.omdbData,
       stremioLink: card.stremioLink,
@@ -129,6 +151,7 @@ export function toSlimCard(mediaType: MediaType, card: SavedCard): SavedCard {
       publishedDate: vi.publishedDate,
       averageRating: vi.averageRating,
       categories: vi.categories,
+      pageCount: vi.pageCount,
       imageLinks: { thumbnail: vi.imageLinks?.thumbnail ?? null },
     },
   }
@@ -145,9 +168,14 @@ export async function listForUser(userId: string, filter: ListFilter = {}): Prom
 
   const query: Record<string, unknown> = { userId }
   if (filter.status) query.status = filter.status
-  if (filter.mediaType) query.mediaType = filter.mediaType
+  // Docs saved pre-rename still have mediaType: "tvshow" on disk until the
+  // migration script has run - match both so they don't disappear meanwhile.
+  if (filter.mediaType) {
+    query.mediaType = filter.mediaType === "series" ? { $in: ["series", "tvshow"] } : filter.mediaType
+  }
 
-  return collection.find(query).sort({ updatedAt: -1 }).toArray()
+  const docs = await collection.find(query).sort({ updatedAt: -1 }).toArray()
+  return docs.map(normalizeDoc)
 }
 
 // Toggle semantics for the three buttons (each toggles its own status):
@@ -164,8 +192,15 @@ export async function toggleStatus(
   const collection = await getSavedMediaCollection()
   if (!collection) throw new Error("Database unavailable")
 
-  const key = { userId, mediaType, mediaId }
-  const existing = await collection.findOne(key)
+  // Match a pre-migration "tvshow" doc for the same item too, so toggling doesn't
+  // create a duplicate "series" doc alongside it - see normalizeMediaType above.
+  const legacyTypes = mediaType === "series" ? ["series", "tvshow"] : [mediaType]
+  const existing = await collection.findOne({
+    userId,
+    mediaId,
+    mediaType: { $in: legacyTypes },
+  } as Record<string, unknown>)
+  const key = existing ? { userId, mediaId, mediaType: existing.mediaType } : { userId, mediaId, mediaType }
 
   if (!existing) {
     const now = new Date()
@@ -186,8 +221,10 @@ export async function toggleStatus(
     return null
   }
 
+  // $set mediaType too, so a legacy "tvshow" doc self-heals to "series" the next
+  // time its status changes, even before the migration script runs.
   await collection.updateOne(key, {
-    $set: { status, card: toSlimCard(mediaType, card), updatedAt: new Date() },
+    $set: { mediaType, status, card: toSlimCard(mediaType, card), updatedAt: new Date() },
   })
   return status
 }

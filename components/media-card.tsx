@@ -3,7 +3,7 @@ import { Star } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useModal } from "./modal-provider"
 import { useSavedMedia } from "./saved-media-provider"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, memo } from "react"
 import { useTheme } from "next-themes"
 
 // Movie interface (from TMDB)
@@ -66,8 +66,8 @@ export interface Movie {
   stremioLink?: string
 }
 
-// TV Show interface (from TMDB)
-export interface TVShow {
+// Series interface (from TMDB, /tv endpoints)
+export interface Series {
   id: number
   name: string
   overview: string
@@ -77,7 +77,7 @@ export interface TVShow {
   vote_average: number
   genre_ids: number[]
   number_of_seasons?: number
-  type: "tvshow"
+  type: "series"
   // Redis cached detailed data
   details?: {
     id: number
@@ -163,7 +163,7 @@ export interface Book {
 }
 
 // Union type for all media items
-export type MediaItem = Movie | TVShow | Book
+export type MediaItem = Movie | Series | Book
 
 interface MediaCardProps {
   item: MediaItem
@@ -172,7 +172,7 @@ interface MediaCardProps {
   loading?: "lazy" | "eager"
 }
 
-export function MediaCard({ item, className, priority = false, loading = "lazy" }: MediaCardProps) {
+function MediaCardComponent({ item, className, priority = false, loading = "lazy" }: MediaCardProps) {
   const { openModal } = useModal()
   const { getStatus, toggle } = useSavedMedia()
   const { resolvedTheme } = useTheme()
@@ -247,7 +247,7 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
       // Use w342 for better size optimization (cards are ~150-200px wide)
       return `https://image.tmdb.org/t/p/w342${item.poster_path}`;
     }
-    if (item.type === "tvshow" && item.poster_path) {
+    if (item.type === "series" && item.poster_path) {
       // Use w342 for better size optimization (cards are ~150-200px wide)
       return `https://image.tmdb.org/t/p/w342${item.poster_path}`;
     }
@@ -258,7 +258,7 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
   };
 
   const getRating = () => {
-    if (item.type === "movie" || item.type === "tvshow") {
+    if (item.type === "movie" || item.type === "series") {
       return item.vote_average || 0;
     }
     if (item.type === "book") {
@@ -303,7 +303,7 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
         ) : (
           <div className="flex h-full items-center justify-center bg-gradient-to-br from-surface-tonal to-surface-tonal-20 text-muted-foreground/60">
             {item.type === "movie" && <Film className="h-16 w-16 opacity-40" />}
-            {item.type === "tvshow" && <Tv className="h-16 w-16 opacity-40" />}
+            {item.type === "series" && <Tv className="h-16 w-16 opacity-40" />}
             {item.type === "book" && <BookOpen className="h-16 w-16 opacity-40" />}
           </div>
         )}
@@ -474,6 +474,8 @@ export function MediaCard({ item, className, priority = false, loading = "lazy" 
     </div>
   )
 }
+
+export const MediaCard = memo(MediaCardComponent)
 
 // Import necessary icons
 import { Film, Tv, BookOpen } from "lucide-react"

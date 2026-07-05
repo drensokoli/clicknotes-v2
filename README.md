@@ -1,10 +1,10 @@
-# ClickNotes v2
+# ClickNotes
 
-A Next.js application for saving and organizing movies, TV shows, and books. Built with modern web technologies and optimized for performance.
+A Next.js application for saving and organizing movies, series, and books. Built with modern web technologies and optimized for performance.
 
 ## Features
 
-- **Media Management**: Save and organize movies, TV shows, and books
+- **Media Management**: Save and organize movies, series, and books
 - **Progressive Loading**: Efficient data loading with infinite scroll
 - **Redis Caching**: Fast data access with server-side caching
 - **Responsive Design**: Works on desktop and mobile devices
@@ -15,13 +15,13 @@ A Next.js application for saving and organizing movies, TV shows, and books. Bui
 
 ### Data Structure
 
-The application uses Redis for data storage of popular movies, TV shows, and NY Times bestsellers. Each media type is stored as a single JSON array under one key, holding minimal "card" fields (title, poster, rating, etc.) - detail pages fetch full TMDB/OMDB data live on demand.
+The application uses Redis for data storage of popular movies, series, and NY Times bestsellers. Each media type is stored as a single JSON array under one key, holding minimal "card" fields (title, poster, rating, etc.) - detail pages fetch full TMDB/OMDB data live on demand.
 
-- `movies_v2` - up to 240 movie cards
-- `tvshows_v2` - up to 240 TV show cards
-- `books_v2` - book cards in multiples of 40
+- `movies` - up to 240 movie cards
+- `series` - up to 240 series cards
+- `books` - book cards in multiples of 40
 
-Cards are read via range queries (`GET /api/redisHandler?type=v2-range&mediaType=...&start=...&end=...`), 20 at a time.
+Cards are read via range queries (`GET /api/redisHandler?type=range&mediaType=...&start=...&end=...`), 20 at a time.
 
 ### Caching System
 
@@ -36,7 +36,7 @@ Cards are read via range queries (`GET /api/redisHandler?type=v2-range&mediaType
 - Node.js 18+ 
 - Redis database
 - API keys for:
-  - TMDB (movies and TV shows)
+  - TMDB (movies and Series)
   - Google Books (book details)
   - NY Times (bestseller lists)
   - OMDB (IMDB IDs)
@@ -90,9 +90,9 @@ Body: { "action": "populate-all" }
 ```
 
 This will:
-- Fetch popular movies and TV shows from TMDB (movies and books in parallel, TV shows after to avoid rate limiting)
+- Fetch popular movies and Series from TMDB (movies and books in parallel, Series after to avoid rate limiting)
 - Fetch bestseller books from NY Times and enrich with Google Books API
-- Store minimal card data in Redis (`movies_v2`, `tvshows_v2`, `books_v2`)
+- Store minimal card data in Redis (`movies`, `series`, `books`)
 - Send email notifications if any errors occur during Redis uploads
 
 This also runs automatically once a week (Mondays at 13:00 UTC) via the Vercel cron job configured in `vercel.json` (`GET /api/cron`).
@@ -101,11 +101,11 @@ Since the app uses a single free-tier Redis instance with limited monthly bandwi
 
 ## API Endpoints
 
-- `GET /api/redisHandler?type=v2-range&mediaType={movies|tvshows|books}&start={n}&end={n}` - Fetch a range of media cards
+- `GET /api/redisHandler?type=range&mediaType={movies|series|books}&start={n}&end={n}` - Fetch a range of media cards
 - `POST /api/cron` - Populate Redis with fresh data
   - `{ "action": "populate-all" }` - Populate all media types
   - `{ "action": "populate-movies" }` - Populate movies only
-  - `{ "action": "populate-tvshows" }` - Populate TV shows only
+  - `{ "action": "populate-series" }` - Populate series only
   - `{ "action": "populate-books" }` - Populate books only
 - `GET /api/auth/*` - Authentication endpoints
 
@@ -150,7 +150,7 @@ If Redis population fails, you can manually retry using the retry page:
 
 **Retry Options**:
 - 🔄 **Retry Movies Population** - Repopulate movies only
-- 🔄 **Retry TV Shows Population** - Repopulate TV shows only  
+- 🔄 **Retry Series Population** - Repopulate Series only  
 - 🔄 **Retry Books Population** - Repopulate books only
 - 🚀 **Retry All Media Types** - Repopulate everything
 
@@ -175,7 +175,7 @@ If Redis population fails, you can manually retry using the retry page:
 
 ### Data Flow
 
-1. Server fetches the first 20 cards of each media type from Redis (`v2-range`)
+1. Server fetches the first 20 cards of each media type from Redis (`range`)
 2. The fetch response is cached by Next.js's data cache for 7 days
 3. Client receives the initial 20 items
 4. On scroll, client fetches the next range of cards from Redis
@@ -188,7 +188,7 @@ If Redis population fails, you can manually retry using the retry page:
 - **Live API Fallback**: Falls back to TMDB/Google Books/NY Times directly if Redis is empty
 - **Optimized Images**: Next.js Image optimization for media posters
 - **Efficient State Management**: Minimal re-renders and optimized updates
-- **Smart API Sequencing**: Avoids rate limiting by running movies/books and TV shows sequentially
+- **Smart API Sequencing**: Avoids rate limiting by running movies/books and Series sequentially
 
 ## Deployment
 

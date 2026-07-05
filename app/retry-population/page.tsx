@@ -77,7 +77,7 @@ export default function RetryPopulationPage() {
 
   const actions = [
     { key: 'populate-movies', label: '🔄 Retry Movies Population', color: 'bg-red-600 hover:bg-red-700' },
-    { key: 'populate-tvshows', label: '🔄 Retry TV Shows Population', color: 'bg-red-600 hover:bg-red-700' },
+    { key: 'populate-series', label: '🔄 Retry Series Population', color: 'bg-red-600 hover:bg-red-700' },
     { key: 'populate-books', label: '🔄 Retry Books Population', color: 'bg-red-600 hover:bg-red-700' },
     { key: 'populate-all', label: '🚀 Retry All Media Types', color: 'bg-green-600 hover:bg-green-700' },
   ];

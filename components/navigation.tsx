@@ -13,7 +13,7 @@ import {
   CarouselItem,
 } from "@/components/ui/carousel"
 
-type Section = "movies" | "tvshows" | "books"
+type Section = "movies" | "series" | "books"
 
 interface NavigationProps {
   activeSection?: Section | undefined
@@ -23,7 +23,7 @@ interface NavigationProps {
 export function Navigation({ activeSection, onSectionChange }: NavigationProps) {
   const navItems = useMemo(() => [
     { id: "movies" as Section, label: "Movies", icon: Film },
-    { id: "tvshows" as Section, label: "TV", icon: Tv },
+    { id: "series" as Section, label: "Series", icon: Tv },
     { id: "books" as Section, label: "Books", icon: BookOpen },
   ], [])
 

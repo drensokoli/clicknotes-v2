@@ -1,6 +1,6 @@
 // Alternative fetch-based API helpers for better SSL handling
 import { fetchJSON } from './secure-fetch';
-import type { Movie, TVShow, Book } from '@/components/media-card';
+import type { Movie, Series, Book } from '@/components/media-card';
 
 // Interfaces for API responses
 interface NYTimesBook {
@@ -85,15 +85,15 @@ export const fetchPopularMoviesWithFetch = async (tmdbApiKey: string): Promise<M
   }
 };
 
-// TV Shows API helpers using secure fetch with parallel requests - fetch up to 240 items
-export const fetchPopularTVShowsWithFetch = async (tmdbApiKey: string): Promise<TVShow[]> => {
+// Series API helpers using secure fetch with parallel requests - fetch up to 240 items
+export const fetchPopularSeriesWithFetch = async (tmdbApiKey: string): Promise<Series[]> => {
   const seenIds = new Set();
-  const allTVShows: TVShow[] = [];
+  const allSeries: Series[] = [];
   
-  // Calculate how many pages we need to get 240 TV shows
-  // TMDB returns 20 TV shows per page, so we need 12 pages minimum
+  // Calculate how many pages we need to get 240 series
+  // TMDB returns 20 series per page, so we need 12 pages minimum
   const pagesNeeded = Math.max(12, Math.ceil(240 / 20));
-  console.log(`📺 Fetching TV shows: targeting 240 items, will fetch ${pagesNeeded} pages`);
+  console.log(`📺 Fetching series: targeting 240 items, will fetch ${pagesNeeded} pages`);
   
   // Create parallel requests for better performance
   const pagePromises = Array.from({ length: pagesNeeded }, (_, i) => {
@@ -101,7 +101,7 @@ export const fetchPopularTVShowsWithFetch = async (tmdbApiKey: string): Promise<
     return fetchJSON(
       `https://api.themoviedb.org/3/tv/popular?api_key=${tmdbApiKey}&language=en-US&page=${page}`
     ).catch((error) => {
-      console.error(`Error fetching TV shows page ${page}:`, error);
+      console.error(`Error fetching series page ${page}:`, error);
       return null;
     });
   });
@@ -109,7 +109,7 @@ export const fetchPopularTVShowsWithFetch = async (tmdbApiKey: string): Promise<
   try {
     const results = await Promise.all(pagePromises);
     
-    // Process results and collect TV shows until we have 240
+    // Process results and collect series until we have 240
     for (const data of results) {
       if (!data || !data.results) continue;
       
@@ -117,20 +117,20 @@ export const fetchPopularTVShowsWithFetch = async (tmdbApiKey: string): Promise<
         if (seenIds.has(show.id)) continue;
         
         seenIds.add(show.id);
-        allTVShows.push(show);
+        allSeries.push(show);
         
-        // Stop when we reach 240 TV shows
-        if (allTVShows.length >= 240) break;
+        // Stop when we reach 240 series
+        if (allSeries.length >= 240) break;
       }
       
-      // Stop processing pages if we have enough TV shows
-      if (allTVShows.length >= 240) break;
+      // Stop processing pages if we have enough series
+      if (allSeries.length >= 240) break;
     }
 
-    console.log(`📺 Final TV shows count: ${allTVShows.length} (targeted 240)`);
-    return allTVShows;
+    console.log(`📺 Final series count: ${allSeries.length} (targeted 240)`);
+    return allSeries;
   } catch (error) {
-    console.error('Error in parallel TV show fetching:', error);
+    console.error('Error in parallel series fetching:', error);
     return [];
   }
 };

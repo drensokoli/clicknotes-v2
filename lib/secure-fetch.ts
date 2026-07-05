@@ -99,7 +99,7 @@ export const secureFetchWithAxios = async (url: string, options: { headers?: Rec
     
     const response = await axios.get(url, {
       headers: {
-        'User-Agent': 'ClickNotes-v2/1.0.0',
+        'User-Agent': 'ClickNotes/1.0.0',
         ...options.headers,
       },
       timeout: 10000,

@@ -36,7 +36,7 @@ interface GoogleBooksItem {
 const axiosInstance = axios.create({
   timeout: 10000, // 10 second timeout
   headers: {
-    'User-Agent': 'ClickNotes-v2/1.0.0'
+    'User-Agent': 'ClickNotes/1.0.0'
   }
 });
 
@@ -94,32 +94,32 @@ export const searchMoviesByTitle = async (title: string, tmdbApiKey: string) => 
   }
 };
 
-// TV Shows API helpers
-export const fetchPopularTVShows = async (tmdbApiKey: string, totalPages: number = 20) => {
-  const popularTvShowsResults = [];
+// Series API helpers
+export const fetchPopularSeries = async (tmdbApiKey: string, totalPages: number = 20) => {
+  const popularSeriesResults = [];
 
   for (let page = 1; page <= totalPages; page++) {
     try {
       const response = await axiosInstance.get(
         `https://api.themoviedb.org/3/tv/popular?api_key=${tmdbApiKey}&language=en-US&page=${page}`
       );
-      popularTvShowsResults.push(...response.data.results);
+      popularSeriesResults.push(...response.data.results);
     } catch (error) {
-      console.error(`Error fetching TV shows page ${page}:`, error);
+      console.error(`Error fetching Series page ${page}:`, error);
     }
   }
 
-  return popularTvShowsResults;
+  return popularSeriesResults;
 };
 
-export const searchTVShowsByTitle = async (title: string, tmdbApiKey: string) => {
+export const searchSeriesByTitle = async (title: string, tmdbApiKey: string) => {
   try {
     const response = await axiosInstance.get(
       `https://api.themoviedb.org/3/search/tv?api_key=${tmdbApiKey}&language=en-US&query=${encodeURIComponent(title)}`
     );
     return response.data.results;
   } catch (error) {
-    console.error('Error searching TV shows:', error);
+    console.error('Error searching Series:', error);
     return [];
   }
 };
@@ -197,6 +197,6 @@ export const searchContentByTitle = async ({
   if (type === 'movie') {
     return searchMoviesByTitle(title, tmdbApiKey);
   } else {
-    return searchTVShowsByTitle(title, tmdbApiKey);
+    return searchSeriesByTitle(title, tmdbApiKey);
   }
 };

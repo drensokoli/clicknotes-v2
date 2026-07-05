@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { listForUser, type MediaType, type SavedStatus } from "@/lib/saved-media"
 
-const MEDIA_TYPES: MediaType[] = ["movie", "tvshow", "book"]
+const MEDIA_TYPES: MediaType[] = ["movie", "series", "book"]
 const STATUSES: SavedStatus[] = ["to_watch", "watching", "watched"]
 
 export async function GET(request: NextRequest) {

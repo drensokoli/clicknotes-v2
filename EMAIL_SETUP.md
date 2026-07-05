@@ -85,7 +85,7 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret
 
 # MongoDB
 MONGODB_URI=your-mongodb-connection-string
-MONGODB_DB_NAME=clicknotes-v2
+MONGODB_DB_NAME=clicknotes
 
 # Email Service (SendGrid Example)
 EMAIL_PROVIDER=sendgrid

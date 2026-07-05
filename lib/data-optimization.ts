@@ -46,7 +46,7 @@ export interface OptimizedMovie {
   stremioLink?: string;
 }
 
-export interface OptimizedTVShow {
+export interface OptimizedSeries {
   id: number;
   name: string;
   overview: string;
@@ -55,7 +55,7 @@ export interface OptimizedTVShow {
   first_air_date: string;
   vote_average: number;
   vote_count: number;
-  type: "tvshow";
+  type: "series";
   details?: {
     genres: Array<{ id: number; name: string }>;
     number_of_seasons: number;
@@ -176,7 +176,7 @@ interface RawTVDetails {
   };
 }
 
-interface RawTVShow {
+interface RawSeries {
   id: number;
   name: string;
   overview: string;
@@ -186,7 +186,7 @@ interface RawTVShow {
   vote_average: number;
   vote_count?: number;
   details?: RawTVDetails;
-  omdbData?: OptimizedTVShow["omdbData"] | null;
+  omdbData?: OptimizedSeries["omdbData"] | null;
   stremioLink?: string | null;
 }
 
@@ -298,30 +298,30 @@ export function optimizeMovieData(movie: RawMovie): OptimizedMovie {
 }
 
 /**
- * Optimize TV show data by removing redundant and unnecessary fields
+ * Optimize series data by removing redundant and unnecessary fields
  */
-export function optimizeTVShowData(tvShow: RawTVShow): OptimizedTVShow {
-  const optimized: OptimizedTVShow = {
-    id: tvShow.id,
-    name: tvShow.name,
-    overview: tvShow.overview,
-    poster_path: tvShow.poster_path,
-    backdrop_path: tvShow.backdrop_path,
-    first_air_date: tvShow.first_air_date,
-    vote_average: tvShow.vote_average,
-    vote_count: tvShow.vote_count ?? 0,
-    type: "tvshow"
+export function optimizeSeriesData(series: RawSeries): OptimizedSeries {
+  const optimized: OptimizedSeries = {
+    id: series.id,
+    name: series.name,
+    overview: series.overview,
+    poster_path: series.poster_path,
+    backdrop_path: series.backdrop_path,
+    first_air_date: series.first_air_date,
+    vote_average: series.vote_average,
+    vote_count: series.vote_count ?? 0,
+    type: "series"
   };
 
   // Optimize details if present - remove duplicates and keep only unique fields
-  if (tvShow.details) {
+  if (series.details) {
     optimized.details = {
-      genres: tvShow.details.genres || [],
-      number_of_seasons: tvShow.details.number_of_seasons,
-      number_of_episodes: tvShow.details.number_of_episodes,
-      status: tvShow.details.status,
-      tagline: tvShow.details.tagline,
-      type: tvShow.details.type,
+      genres: series.details.genres || [],
+      number_of_seasons: series.details.number_of_seasons,
+      number_of_episodes: series.details.number_of_episodes,
+      status: series.details.status,
+      tagline: series.details.tagline,
+      type: series.details.type,
       credits: {
         cast: [],
         crew: []
@@ -332,8 +332,8 @@ export function optimizeTVShowData(tvShow: RawTVShow): OptimizedTVShow {
     };
 
     // Keep only first 10 cast members with minimal data
-    if (tvShow.details.credits?.cast) {
-      optimized.details.credits.cast = tvShow.details.credits.cast
+    if (series.details.credits?.cast) {
+      optimized.details.credits.cast = series.details.credits.cast
         .slice(0, 10)
         .map((actor: RawCreditPerson) => ({
           id: actor.id,
@@ -344,8 +344,8 @@ export function optimizeTVShowData(tvShow: RawTVShow): OptimizedTVShow {
     }
 
     // Keep only the main director from crew
-    if (tvShow.details.credits?.crew) {
-      const director = tvShow.details.credits.crew.find((member: RawCreditPerson) => member.job === "Director");
+    if (series.details.credits?.crew) {
+      const director = series.details.credits.crew.find((member: RawCreditPerson) => member.job === "Director");
       if (director) {
         optimized.details.credits.crew = [{
           id: director.id,
@@ -357,8 +357,8 @@ export function optimizeTVShowData(tvShow: RawTVShow): OptimizedTVShow {
     }
 
     // Keep only the trailer from videos
-    if (tvShow.details.videos?.results) {
-      const trailer = tvShow.details.videos.results.find((video: RawVideoItem) => 
+    if (series.details.videos?.results) {
+      const trailer = series.details.videos.results.find((video: RawVideoItem) => 
         video.type === "Trailer" && video.site === "YouTube"
       );
       if (trailer) {
@@ -374,13 +374,13 @@ export function optimizeTVShowData(tvShow: RawTVShow): OptimizedTVShow {
   }
 
   // Keep OMDB data as is (already minimal)
-  if (tvShow.omdbData) {
-    optimized.omdbData = tvShow.omdbData;
+  if (series.omdbData) {
+    optimized.omdbData = series.omdbData;
   }
 
   // Keep Stremio link
-  if (tvShow.stremioLink) {
-    optimized.stremioLink = tvShow.stremioLink;
+  if (series.stremioLink) {
+    optimized.stremioLink = series.stremioLink;
   }
 
   return optimized;

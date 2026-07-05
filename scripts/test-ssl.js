@@ -19,7 +19,7 @@ const testTMDBRequest = () => {
       path: '/3/movie/popular?api_key=test&language=en-US&page=1',
       method: 'GET',
       headers: {
-        'User-Agent': 'ClickNotes-v2/1.0.0'
+        'User-Agent': 'ClickNotes/1.0.0'
       }
     };
 

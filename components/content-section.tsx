@@ -2,48 +2,120 @@
 
 import * as React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
-import { MediaCard, MediaItem, Movie, TVShow, Book } from "./media-card"
+import { MediaCard, MediaItem, Movie, Series, Book } from "./media-card"
 import { searchContentByTitle, searchBooksByTitle } from "@/lib/api-helpers"
 import { useModal } from "./modal-provider"
+import { useSlashFocus } from "@/hooks/use-slash-focus"
+import { ScrollToTopButton } from "./scroll-to-top-button"
 
-type Section = "movies" | "tvshows" | "books"
+type Section = "movies" | "series" | "books"
+
+// Memoized so that typing in the search bar (which re-renders ContentSection on
+// every keystroke, before the debounced fetch even runs) doesn't also re-render
+// the whole media grid - only actual item/list changes do.
+const MediaGrid = React.memo(function MediaGrid({
+  items,
+  activeSection,
+  displayCounts,
+}: {
+  items: MediaItem[]
+  activeSection: Section
+  displayCounts: { movies: number; series: number; books: number }
+}) {
+  const originalCount = items.length
+  const validItems = items.filter((item) => {
+    // Filter out invalid items before rendering
+    if (!item || !item.type) return false
+
+    // Additional validation for books
+    if (item.type === 'book') {
+      if (!item.volumeInfo) return false
+      // Ensure we have at least a title or authors
+      const hasDisplayableContent = item.volumeInfo.title ||
+        (item.volumeInfo.authors && item.volumeInfo.authors.length > 0)
+      return hasDisplayableContent
+    }
+
+    return true
+  })
+
+  const filteredCount = originalCount - validItems.length
+  if (filteredCount > 0 && process.env.NODE_ENV === 'development') {
+    console.log(`🔍 Filtered out ${filteredCount} invalid items from ${originalCount} total items`)
+  }
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-6 md:gap-8">
+      {validItems.map((item, index) => {
+        // Calculate animation delay based on position in current page, not total index
+        // Only animate the initial 40 items, and new items when loaded (20 at a time after that)
+        const currentDisplayCount = displayCounts[activeSection]
+        const previousDisplayCount = currentDisplayCount <= 40 ? 0 : currentDisplayCount - 20
+        const isNewlyLoaded = index >= previousDisplayCount
+        const animationIndex = isNewlyLoaded ? (index - previousDisplayCount) : index
+        const shouldAnimate = index < 40 || isNewlyLoaded
+
+        return (
+          <div
+            key={`${item.type}-${item.id}-${index}`}
+            className={shouldAnimate ? "animate-in fade-in slide-in-from-bottom-4" : ""}
+            style={shouldAnimate ? {
+              animationDelay: `${Math.min(animationIndex * 50, 100)}ms`,
+              animationFillMode: 'both'
+            } : {}}
+          >
+            <MediaCard
+              item={item}
+              priority={index < 6}
+              loading={index < 6 ? "eager" : "lazy"}
+            />
+          </div>
+        )
+      })}
+    </div>
+  )
+})
 
 interface ContentSectionProps {
   initialMovies: Movie[]
-  initialTVShows: TVShow[]
+  initialSeries: Series[]
   initialBooks: Book[]
   movieRanking?: Array<{value: string, score: number}>
-  tvShowRanking?: Array<{value: string, score: number}>
+  seriesRanking?: Array<{value: string, score: number}>
   bookRanking?: Array<{value: string, score: number}>
   tmdbApiKey: string
   googleBooksApiKey: string
   // Progressive loading props
   redisKeysFetched?: {
     movies: number
-    tvshows: number
+    series: number
     books: number
   }
   // External state management props
   externalActiveSection?: Section
   externalSearchQuery?: string
   externalSearchResults?: MediaItem[]
-  onSearchChange?: (query: string, results: MediaItem[]) => void
+  // Split in two so a debounced results callback can never stomp the query the
+  // user is actively typing - see the note on setSearchResults below.
+  onQueryChange?: (query: string) => void
+  onResultsChange?: (results: MediaItem[]) => void
 }
 
 export function ContentSection({
   initialMovies,
-  initialTVShows,
+  initialSeries,
   initialBooks,
   movieRanking = [],
-  tvShowRanking = [],
+  seriesRanking = [],
   bookRanking = [],
   tmdbApiKey,
   googleBooksApiKey,
-  redisKeysFetched = { movies: 1, tvshows: 1, books: 1 },
+  redisKeysFetched = { movies: 1, series: 1, books: 1 },
   externalActiveSection,
   externalSearchQuery,
   externalSearchResults,
-  onSearchChange
+  onQueryChange,
+  onResultsChange
 }: ContentSectionProps) {
   const { setTmdbApiKey } = useModal()
   
@@ -56,13 +128,13 @@ export function ContentSection({
   useEffect(() => {
     console.log('📊 ContentSection rankings received:', {
       movieRanking: movieRanking.length,
-      tvShowRanking: tvShowRanking.length,
+      seriesRanking: seriesRanking.length,
       bookRanking: bookRanking.length,
       movieRankingSample: movieRanking.slice(0, 3).map(r => ({ id: r.value, rank: r.score })),
-      tvShowRankingSample: tvShowRanking.slice(0, 3).map(r => ({ id: r.value, rank: r.score })),
+      seriesRankingSample: seriesRanking.slice(0, 3).map(r => ({ id: r.value, rank: r.score })),
       bookRankingSample: bookRanking.slice(0, 3).map(r => ({ id: r.value, rank: r.score }))
     });
-  }, [movieRanking, tvShowRanking, bookRanking]);
+  }, [movieRanking, seriesRanking, bookRanking]);
   
   // Use external state if provided, otherwise use internal state
   const [internalActiveSection, setInternalActiveSection] = useState<Section>("movies")
@@ -76,37 +148,40 @@ export function ContentSection({
   const searchQuery = externalSearchQuery ?? internalSearchQuery
   const searchResults = externalSearchResults ?? internalSearchResults
 
+  // Deliberately does NOT also report results here (see setSearchResults below) -
+  // conflating the two in one callback used to let a slow, stale debounced fetch
+  // stomp the query the user is actively typing (see the request-guard note further
+  // down for the full race condition this fixes).
   const setSearchQuery = useCallback((query: string) => {
-    if (externalSearchQuery !== undefined && onSearchChange) {
-      // If external state is provided, notify parent only if the query is different
+    if (externalSearchQuery !== undefined && onQueryChange) {
       if (query !== externalSearchQuery) {
-        onSearchChange(query, externalSearchResults ?? [])
+        onQueryChange(query)
       }
       return
     }
     setInternalSearchQuery(query)
-  }, [externalSearchQuery, onSearchChange, externalSearchResults])
+  }, [externalSearchQuery, onQueryChange])
 
   const setSearchResults = useCallback((results: MediaItem[]) => {
-    if (externalSearchQuery !== undefined && onSearchChange) {
+    if (externalSearchQuery !== undefined && onResultsChange) {
       // If external state is provided, notify parent only if results are different
       // Compare length and first few items to avoid deep comparison
       const currentResults = externalSearchResults ?? []
-      const isDifferent = currentResults.length !== results.length || 
+      const isDifferent = currentResults.length !== results.length ||
         (results.length > 0 && currentResults.length > 0 && currentResults[0]?.id !== results[0]?.id)
-      
+
       if (isDifferent) {
-        onSearchChange(externalSearchQuery ?? "", results)
+        onResultsChange(results)
       }
       return
     }
     setInternalSearchResults(results)
-  }, [externalSearchQuery, onSearchChange, externalSearchResults])
+  }, [externalSearchQuery, onResultsChange, externalSearchResults])
 
   const [isSearching, setIsSearching] = useState(false)
   const [displayCounts, setDisplayCounts] = useState({
     movies: 40,
-    tvshows: 40,
+    series: 40,
     books: 40
   })
 
@@ -116,17 +191,20 @@ export function ContentSection({
   const [isLoadingNextPage, setIsLoadingNextPage] = useState(false)
   const [isPrefetching, setIsPrefetching] = useState<{[key in Section]: boolean}>({
     movies: false,
-    tvshows: false,
+    series: false,
     books: false
   })
   const debounceTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchRequestId = useRef(0)
   const loadMoreRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  useSlashFocus(searchInputRef)
   
   // Progressive loading state - now tracks ranking position instead of Redis keys
   const [currentRankingPosition, setCurrentRankingPosition] = useState(redisKeysFetched)
   const [allMediaData, setAllMediaData] = useState({
     movies: initialMovies,
-    tvshows: initialTVShows,
+    series: initialSeries,
     books: initialBooks
   })
   
@@ -140,18 +218,18 @@ export function ContentSection({
     const startIndex = currentDataCount;
     const endIndex = startIndex + 19; // Prefetch next 20 items
 
-    console.log(`🔄 Background prefetch: ${mediaType} v2 cards range: ${startIndex}-${endIndex}`);
+    console.log(`🔄 Background prefetch: ${mediaType} cards range: ${startIndex}-${endIndex}`);
 
     // Set prefetching flag
     setIsPrefetching(prev => ({ ...prev, [mediaType]: true }));
 
     try {
       const cardsResponse = await fetch(
-        `/api/redisHandler?type=v2-range&mediaType=${mediaType}&start=${startIndex}&end=${endIndex}`
+        `/api/redisHandler?type=range&mediaType=${mediaType}&start=${startIndex}&end=${endIndex}`
       );
 
       if (!cardsResponse.ok) {
-        console.error(`❌ Prefetch failed to fetch v2-range cards for ${mediaType}`);
+        console.error(`❌ Prefetch failed to fetch cards for ${mediaType}`);
         return;
       }
 
@@ -159,7 +237,7 @@ export function ContentSection({
 
       if (cardsData.success && Array.isArray(cardsData.items) && cardsData.items.length > 0) {
         const newItems = cardsData.items;
-        console.log(`✅ Prefetch successful: ${newItems.length} new ${mediaType} v2 cards loaded in background`);
+        console.log(`✅ Prefetch successful: ${newItems.length} new ${mediaType} cards loaded in background`);
 
         // Update data state (but don't update display count)
         setAllMediaData(prev => ({
@@ -204,13 +282,13 @@ export function ContentSection({
     setIsLoadingNextPage(true);
 
     try {
-      console.log(`📦 Fetching ${mediaType} v2 cards range: ${startIndex}-${endIndex}`);
+      console.log(`📦 Fetching ${mediaType} cards range: ${startIndex}-${endIndex}`);
       const cardsResponse = await fetch(
-        `/api/redisHandler?type=v2-range&mediaType=${mediaType}&start=${startIndex}&end=${endIndex}`
+        `/api/redisHandler?type=range&mediaType=${mediaType}&start=${startIndex}&end=${endIndex}`
       );
 
       if (!cardsResponse.ok) {
-        console.error(`❌ Failed to fetch v2-range cards for ${mediaType}`);
+        console.error(`❌ Failed to fetch cards for ${mediaType}`);
         return;
       }
 
@@ -218,7 +296,7 @@ export function ContentSection({
 
       if (cardsData.success && Array.isArray(cardsData.items) && cardsData.items.length > 0) {
         const newItems = cardsData.items;
-        console.log(`✅ Successfully fetched ${newItems.length} new ${mediaType} v2 cards`);
+        console.log(`✅ Successfully fetched ${newItems.length} new ${mediaType} cards`);
 
         // Update all states in the correct order
         setAllMediaData(prev => {
@@ -248,7 +326,7 @@ export function ContentSection({
         });
 
       } else {
-        console.log(`✅ No more ${mediaType} items available in v2 cards`);
+        console.log(`✅ No more ${mediaType} items available in cards`);
         // Mark as end
         setCurrentRankingPosition(prev => ({
           ...prev,
@@ -349,9 +427,11 @@ export function ContentSection({
   useEffect(() => {
     // Only handle hash changes if we're not using external state management
     if (externalActiveSection === undefined) {
-      // Check initial hash
-      const hash = window.location.hash.slice(1) as Section
-      if (hash && ["movies", "tvshows", "books"].includes(hash)) {
+      // Check initial hash. "tvshows" was the URL hash before the Series rename -
+      // keep resolving old bookmarks/links to the same section.
+      const rawHash = window.location.hash.slice(1)
+      const hash = (rawHash === "tvshows" ? "series" : rawHash) as Section
+      if (hash && ["movies", "series", "books"].includes(hash)) {
         if (externalActiveSection === undefined) {
           setInternalActiveSection(hash)
         }
@@ -359,8 +439,9 @@ export function ContentSection({
 
       // Listen for hash changes
       const handleHashChange = () => {
-        const newHash = window.location.hash.slice(1) as Section
-        if (newHash && ["movies", "tvshows", "books"].includes(newHash)) {
+        const rawNewHash = window.location.hash.slice(1)
+        const newHash = (rawNewHash === "tvshows" ? "series" : rawNewHash) as Section
+        if (newHash && ["movies", "series", "books"].includes(newHash)) {
           if (externalActiveSection === undefined) {
             setInternalActiveSection(newHash)
           }
@@ -397,6 +478,12 @@ export function ContentSection({
     setIsSearching(true)
     clearTimeout(debounceTimeout.current!)
 
+    // Guards against out-of-order responses: if a slower earlier request resolves
+    // after a newer one has already started, its results are discarded instead of
+    // overwriting the fresher results on screen.
+    searchRequestId.current += 1
+    const requestId = searchRequestId.current
+
     debounceTimeout.current = setTimeout(async () => {
       try {
         let results: MediaItem[] = []
@@ -408,24 +495,25 @@ export function ContentSection({
             type: "movie"
           })
           results = movieResults.map((movie: Movie) => ({ ...movie, type: "movie" as const }))
-        } else if (activeSection === "tvshows") {
+        } else if (activeSection === "series") {
           const tvResults = await searchContentByTitle({
             title: searchQuery,
             tmdbApiKey,
             type: "tv"
           })
-          results = tvResults.map((tv: TVShow) => ({ ...tv, type: "tvshow" as const }))
+          results = tvResults.map((tv: Series) => ({ ...tv, type: "series" as const }))
         } else if (activeSection === "books") {
           const bookResults = await searchBooksByTitle(searchQuery, googleBooksApiKey)
           results = bookResults.map((book: Book) => ({ ...book, type: "book" as const }))
         }
 
+        if (requestId !== searchRequestId.current) return
         setSearchResults(results)
       } catch (error) {
         console.error("Search error:", error)
-        setSearchResults([])
+        if (requestId === searchRequestId.current) setSearchResults([])
       } finally {
-        setIsSearching(false)
+        if (requestId === searchRequestId.current) setIsSearching(false)
       }
     }, 300)
 
@@ -442,8 +530,8 @@ export function ContentSection({
       switch (activeSection) {
         case "movies":
           return allMediaData.movies.slice(0, currentDisplayCount).map(movie => ({ ...movie, type: "movie" as const }))
-        case "tvshows":
-          return allMediaData.tvshows.slice(0, currentDisplayCount).map(tv => ({ ...tv, type: "tvshow" as const }))
+        case "series":
+          return allMediaData.series.slice(0, currentDisplayCount).map(tv => ({ ...tv, type: "series" as const }))
         case "books":
           return allMediaData.books.slice(0, currentDisplayCount).map(book => ({ ...book, type: "book" as const }))
         default:
@@ -460,8 +548,8 @@ export function ContentSection({
     switch (activeSection) {
       case "movies":
         return "Movies"
-      case "tvshows":
-        return "TV Shows"
+      case "series":
+        return "Series"
       case "books":
         return "Books"
       default:
@@ -498,8 +586,9 @@ export function ContentSection({
                   />
                 </svg>
                 <input
+                  ref={searchInputRef}
                   type="text"
-                  placeholder={`Search ${activeSection === "tvshows" ? "TV shows" : activeSection}...`}
+                  placeholder={`Search ${activeSection}...`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => {
@@ -510,7 +599,7 @@ export function ContentSection({
                   }}
                   className="h-12 w-full px-12 rounded-lg focus:outline-none hover:cursor-pointer border-2 border-primary bg-white dark:bg-surface shadow-xl"
                 />
-                {searchQuery && (
+                {searchQuery ? (
                   <button
                     onClick={() => {
                       setSearchQuery("")
@@ -522,6 +611,10 @@ export function ContentSection({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
+                ) : (
+                  <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center justify-center px-1.5 py-0.5 rounded border border-border/50 bg-surface-elevated text-[10px] font-medium text-muted-foreground pointer-events-none">
+                    /
+                  </kbd>
                 )}
               </div>
             </form>
@@ -558,8 +651,9 @@ export function ContentSection({
                 />
               </svg>
               <input
+                ref={searchInputRef}
                 type="text"
-                placeholder={`Search ${activeSection === "tvshows" ? "TV shows" : activeSection}...`}
+                placeholder={`Search ${activeSection}...`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
@@ -570,7 +664,7 @@ export function ContentSection({
                 }}
                 className="h-12 w-full px-12 rounded-lg focus:outline-none hover:cursor-pointer border-2 border-primary bg-white dark:bg-surface shadow-xl"
               />
-              {searchQuery && (
+              {searchQuery ? (
                 <button
                   onClick={() => {
                     setSearchQuery("")
@@ -582,6 +676,10 @@ export function ContentSection({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
+              ) : (
+                <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center justify-center px-1.5 py-0.5 rounded border border-border/50 bg-surface-elevated text-[12px] font-semibold text-muted-foreground pointer-events-none">
+                  /
+                </kbd>
               )}
             </div>
           </form>
@@ -668,59 +766,7 @@ export function ContentSection({
       */}
 
       {/* Grid - Always 2 columns on small screens */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-6 md:gap-8">
-        {(() => {
-          const originalCount = filteredData.length;
-          const validItems = filteredData.filter((item) => {
-            // Filter out invalid items before rendering
-            if (!item || !item.type) return false;
-            
-            // Additional validation for books
-            if (item.type === 'book') {
-              if (!item.volumeInfo) return false;
-              // Ensure we have at least a title or authors
-              const hasDisplayableContent = item.volumeInfo.title || 
-                (item.volumeInfo.authors && item.volumeInfo.authors.length > 0);
-              return hasDisplayableContent;
-            }
-            
-            return true;
-          });
-          
-          const filteredCount = originalCount - validItems.length;
-          if (filteredCount > 0 && process.env.NODE_ENV === 'development') {
-            console.log(`🔍 Filtered out ${filteredCount} invalid items from ${originalCount} total items`);
-          }
-          
-          return validItems;
-        })()
-          .map((item, index) => {
-            // Calculate animation delay based on position in current page, not total index
-            // Only animate the initial 40 items, and new items when loaded (20 at a time after that)
-            const currentDisplayCount = displayCounts[activeSection];
-            const previousDisplayCount = currentDisplayCount <= 40 ? 0 : currentDisplayCount - 20;
-            const isNewlyLoaded = index >= previousDisplayCount;
-            const animationIndex = isNewlyLoaded ? (index - previousDisplayCount) : index;
-            const shouldAnimate = index < 40 || isNewlyLoaded;
-            
-            return (
-              <div
-                key={`${item.type}-${item.id}-${index}`}
-                className={shouldAnimate ? "animate-in fade-in slide-in-from-bottom-4" : ""}
-                style={shouldAnimate ? { 
-                  animationDelay: `${Math.min(animationIndex * 50, 100)}ms`, 
-                  animationFillMode: 'both' 
-                } : {}}
-              >
-                <MediaCard 
-                  item={item} 
-                  priority={index < 6} 
-                  loading={index < 6 ? "eager" : "lazy"} 
-                />
-              </div>
-            )
-          })}
-      </div>
+      <MediaGrid items={filteredData} activeSection={activeSection} displayCounts={displayCounts} />
 
       {/* Search Loading Skeleton */}
       {isSearching && (
@@ -787,6 +833,8 @@ export function ContentSection({
           </div>
         </div>
       )}
+
+      <ScrollToTopButton />
     </div>
   )
 }

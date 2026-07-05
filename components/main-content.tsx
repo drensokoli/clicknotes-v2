@@ -4,22 +4,22 @@ import { useState, useEffect } from "react"
 import { ClientNavigation } from "./client-navigation"
 import { ContentSection } from "./content-section"
 import { MediaDetailsModal } from "./media-details-modal"
-import type { Movie, TVShow, Book } from "./media-card"
+import type { Movie, Series, Book } from "./media-card"
 
-type Section = "movies" | "tvshows" | "books"
+type Section = "movies" | "series" | "books"
 
 interface MainContentProps {
   initialMovies: Movie[]
-  initialTVShows: TVShow[]
+  initialSeries: Series[]
   initialBooks: Book[]
   movieRanking?: Array<{value: string, score: number}>
-  tvShowRanking?: Array<{value: string, score: number}>
+  seriesRanking?: Array<{value: string, score: number}>
   bookRanking?: Array<{value: string, score: number}>
   tmdbApiKey: string
   googleBooksApiKey: string
   redisKeysFetched: {
     movies: number
-    tvshows: number
+    series: number
     books: number
   }
   omdbApiKeys: string[]
@@ -27,10 +27,10 @@ interface MainContentProps {
 
 export function MainContent({
   initialMovies,
-  initialTVShows,
+  initialSeries,
   initialBooks,
   movieRanking = [],
-  tvShowRanking = [],
+  seriesRanking = [],
   bookRanking = [],
   tmdbApiKey,
   googleBooksApiKey,
@@ -40,12 +40,15 @@ export function MainContent({
   // Start with undefined to prevent flash of incorrect selected state
   const [activeSection, setActiveSection] = useState<Section | undefined>(undefined)
   const [searchQuery, setSearchQuery] = useState("")
-  const [searchResults, setSearchResults] = useState<(Movie | TVShow | Book)[]>([])
+  const [searchResults, setSearchResults] = useState<(Movie | Series | Book)[]>([])
 
   // Handle initial hash on component mount
   useEffect(() => {
-    const hash = window.location.hash.slice(1) as Section
-    if (hash && ["movies", "tvshows", "books"].includes(hash)) {
+    const rawHash = window.location.hash.slice(1)
+    // "tvshows" was the URL hash before the Series rename - keep resolving old
+    // bookmarks/links to the same section.
+    const hash = rawHash === "tvshows" ? "series" : (rawHash as Section)
+    if (hash && ["movies", "series", "books"].includes(hash)) {
       setActiveSection(hash)
     } else {
       // Default to movies if no hash
@@ -59,8 +62,15 @@ export function MainContent({
     setSearchResults([])
   }
 
-  const handleSearchChange = (query: string, results: (Movie | TVShow | Book)[]) => {
+  // Kept as two separate handlers (rather than one combined onSearchChange) so a
+  // debounced results update can never overwrite the query the user is currently
+  // typing - see the note in content-section.tsx's setSearchResults for the race
+  // condition this avoids.
+  const handleQueryChange = (query: string) => {
     setSearchQuery(query)
+  }
+
+  const handleResultsChange = (results: (Movie | Series | Book)[]) => {
     setSearchResults(results)
   }
 
@@ -73,10 +83,10 @@ export function MainContent({
       <main>
         <ContentSection
           initialMovies={initialMovies}
-          initialTVShows={initialTVShows}
+          initialSeries={initialSeries}
           initialBooks={initialBooks}
           movieRanking={movieRanking}
-          tvShowRanking={tvShowRanking}
+          seriesRanking={seriesRanking}
           bookRanking={bookRanking}
           tmdbApiKey={tmdbApiKey}
           googleBooksApiKey={googleBooksApiKey}
@@ -84,7 +94,8 @@ export function MainContent({
           externalActiveSection={activeSection}
           externalSearchQuery={searchQuery}
           externalSearchResults={searchResults}
-          onSearchChange={handleSearchChange}
+          onQueryChange={handleQueryChange}
+          onResultsChange={handleResultsChange}
         />
         <MediaDetailsModal
           omdbApiKeys={omdbApiKeys}

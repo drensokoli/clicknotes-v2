@@ -4,7 +4,7 @@
 // Usage:
 //   node scripts/populate-redis.js                    # Populate all data (skips if refreshed within the last week)
 //   node scripts/populate-redis.js movies             # Populate only movies
-//   node scripts/populate-redis.js tvshows            # Populate only TV shows
+//   node scripts/populate-redis.js series             # Populate only Series
 //   node scripts/populate-redis.js books              # Populate only books
 //   node scripts/populate-redis.js all --force        # Force repopulation even if data is still fresh
 //
@@ -50,7 +50,7 @@ async function main() {
   const actionMap = {
     'all': 'populate-all',
     'movies': 'populate-movies',
-    'tvshows': 'populate-tvshows',
+    'series': 'populate-series',
     'books': 'populate-books'
   };
 
@@ -61,7 +61,7 @@ async function main() {
     console.error('Invalid data type. Valid types are:');
     console.error('   all      - Populate all data types');
     console.error('   movies   - Populate only movies');
-    console.error('   tvshows  - Populate only TV shows');
+    console.error('   series   - Populate only Series');
     console.error('   books    - Populate only books');
     console.error('Pass --force to repopulate even if data was refreshed within the last week.');
     process.exit(1);

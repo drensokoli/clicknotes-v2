@@ -58,7 +58,7 @@ export const fallbackMovies = [
   }
 ];
 
-export const fallbackTVShows = [
+export const fallbackSeries = [
   {
     id: 1,
     name: "Breaking Bad",

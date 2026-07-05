@@ -5,7 +5,7 @@ import { MongoDBAdapter } from "@next-auth/mongodb-adapter"
 import clientPromise from "@/lib/mongodb"
 import * as bcrypt from "bcryptjs"
 
-const db = process.env.MONGODB_DB_NAME || "clicknotes-v2"
+const db = process.env.MONGODB_DB_NAME || "clicknotes"
 
 // Development environment configuration
 // Fix SSL certificate issues in development

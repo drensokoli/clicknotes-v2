@@ -138,7 +138,7 @@ export function UserProfile() {
           </button>
 
           <Link
-            href="/saved"
+            href="/library"
             onClick={() => setIsDropdownOpen(false)}
             className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
           >

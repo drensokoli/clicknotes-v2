@@ -1,5 +1,5 @@
 {
-  "name": "clicknotes-v2",
+  "name": "clicknotes",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,8 +10,10 @@
     "lint": "eslint",
     "populate-redis": "node scripts/populate-redis.js all",
     "populate-movies": "node scripts/populate-redis.js movies",
-    "populate-tvshows": "node scripts/populate-redis.js tvshows",
+    "populate-series": "node scripts/populate-redis.js series",
     "populate-books": "node scripts/populate-redis.js books",
+    "migrate-tvshow-to-series": "node scripts/migrate-tvshow-to-series.js",
+    "backfill-saved-genres": "node scripts/backfill-saved-genres.js",
     "test-ssl": "node scripts/test-ssl.js"
   },
   "dependencies": {

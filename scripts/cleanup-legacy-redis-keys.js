@@ -2,7 +2,7 @@
 
 // One-time cleanup for Redis keys left over from the old (pre-v2) caching architecture.
 // These keys are no longer read by any part of the app - the homepage and infinite
-// scroll only ever read `movies_v2` / `tvshows_v2` / `books_v2`.
+// scroll only ever read `movies` / `series` / `books`.
 //
 // Usage:
 //   node scripts/cleanup-legacy-redis-keys.js               # dry run, lists what would be deleted
@@ -23,6 +23,13 @@ const LEGACY_KEY_PATTERNS = [
   'tvshow:*',
   'book:*',
   'popular_ranking:*',
+  // Pre-rename "_v2"-suffixed keys (including the pre-Series-rename `tvshows_v2`) -
+  // superseded by the un-suffixed `movies`/`series`/`books` keys once
+  // scripts/migrate-tvshow-to-series.js and the next cron population have run.
+  'movies_v2',
+  'series_v2',
+  'tvshows_v2',
+  'books_v2',
 ]
 
 async function scanMatching(client, pattern) {

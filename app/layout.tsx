@@ -11,8 +11,8 @@ import Footer from "@/components/footer"
 import { PWAInstallToast } from "@/components/pwa-install-toast"
 
 export const metadata: Metadata = {
-  title: "ClickNotes v2",
-  description: "Save and organize your favorite movies, TV shows, and books",
+  title: "ClickNotes",
+  description: "Save and organize your favorite movies, Series, and books",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [

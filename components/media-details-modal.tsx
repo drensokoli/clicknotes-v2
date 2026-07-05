@@ -90,7 +90,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
     }
   }
 
-  // Fetch detailed data when modal opens - only for movies and TV shows
+  // Fetch detailed data when modal opens - only for movies and Series
   useEffect(() => {
     if (isModalOpen && item) {
       // Reset data when modal opens
@@ -107,8 +107,8 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
         omdbDataKeys: 'omdbData' in item && item.omdbData ? Object.keys(item.omdbData) : []
       });
 
-      // Only fetch details for movies and TV shows, not books
-      if ((item.type === 'movie' || item.type === 'tvshow') && tmdbApiKey) {
+      // Only fetch details for movies and Series, not books
+      if ((item.type === 'movie' || item.type === 'series') && tmdbApiKey) {
         setIsLoading(true)
 
         const fetchDetails = async () => {
@@ -142,7 +142,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
             let details = null
             if (item.type === 'movie') {
               details = await fetchMovieDetails(item.id, tmdbApiKey)
-            } else if (item.type === 'tvshow') {
+            } else if (item.type === 'series') {
               details = await fetchTVDetails(item.id, tmdbApiKey)
             }
             setDetailedData(details)
@@ -260,7 +260,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
     }
 
     // Fallback to genre IDs with mapping for movies/TV
-    if ('genre_ids' in item && (item.type === 'movie' || item.type === 'tvshow')) {
+    if ('genre_ids' in item && (item.type === 'movie' || item.type === 'series')) {
       return getGenreNames(item.genre_ids || [], item.type === 'movie' ? 'movie' : 'tv')
     }
 
@@ -274,7 +274,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
 
   const getExternalLink = () => {
     if (item.type === "movie") return `https://www.themoviedb.org/movie/${item.id}`
-    if (item.type === "tvshow") return `https://www.themoviedb.org/tv/${item.id}`
+    if (item.type === "series") return `https://www.themoviedb.org/tv/${item.id}`
     if (item.type === "book" && 'volumeInfo' in item && item.volumeInfo.infoLink) return item.volumeInfo.infoLink
     return null
   }
@@ -290,7 +290,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
     if (detailedData && 'credits' in detailedData) {
       if (item.type === 'movie') {
         return detailedData.credits.crew.find(person => person.job === 'Director')
-      } else if (item.type === 'tvshow' && 'created_by' in detailedData) {
+      } else if (item.type === 'series' && 'created_by' in detailedData) {
         return detailedData.created_by[0]
       }
     }
@@ -533,7 +533,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                 {/* External links row */}
                 <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
                   {/* Watch on Stremio - Only for movies/TV with IMDB ID */}
-                  {!isLoading && (item.type === 'movie' || item.type === 'tvshow') && omdbData?.imdbId && (
+                  {!isLoading && (item.type === 'movie' || item.type === 'series') && omdbData?.imdbId && (
                     <motion.a
                       href={`https://www.strem.io/s/${item.type === 'movie' ? 'movie' : 'series'}/${getTitle().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`}
                       target="_blank"
@@ -569,7 +569,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                   {/* Loading placeholder for Watch/Trailer while their data is still being
                       fetched live (pre-fetched items resolve isLoading to false almost
                       immediately, so this only shows for the on-demand fallback case) */}
-                  {isLoading && (item.type === 'movie' || item.type === 'tvshow') && (
+                  {isLoading && (item.type === 'movie' || item.type === 'series') && (
                     <div className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-surface-elevated text-muted-foreground text-sm sm:text-base">
                       <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/40 border-t-transparent animate-spin" />
                       <span className="hidden sm:inline">Loading</span>
@@ -577,7 +577,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                   )}
 
                   {/* Watch Trailer - Only for movies/TV */}
-                  {!isLoading && (item.type === 'movie' || item.type === 'tvshow') && getTrailerUrl() && (
+                  {!isLoading && (item.type === 'movie' || item.type === 'series') && getTrailerUrl() && (
                     <motion.button
                       onClick={() => {
                         // Scroll to trailer section
@@ -675,15 +675,15 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                       {getRuntime()} minutes
                     </p>
                   </div>
-                ) : isLoading && (item.type === 'movie' || item.type === 'tvshow') ? (
+                ) : isLoading && (item.type === 'movie' || item.type === 'series') ? (
                   <div className="h-4 w-24 rounded bg-surface-elevated animate-pulse" />
                 ) : null}
 
-                {/* Trailer - Only for movies and TV shows. Gated on !isLoading so it
+                {/* Trailer - Only for movies and Series. Gated on !isLoading so it
                     doesn't silently pop in mid-fetch without the shared loading
                     indicator below having shown first (pre-fetched items skip this,
                     since isLoading resolves to false almost immediately for them). */}
-                {!isLoading && (item.type === 'movie' || item.type === 'tvshow') && getYouTubeVideoId() && (
+                {!isLoading && (item.type === 'movie' || item.type === 'series') && getYouTubeVideoId() && (
                   <motion.div
                     id="trailer-section"
                     initial={{ opacity: 0, y: 20 }}
@@ -709,8 +709,8 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                   </motion.div>
                 )}
 
-                {/* Cast & Crew - Only for movies and TV shows */}
-                {!isLoading && (item.type === 'movie' || item.type === 'tvshow') && getCast().length > 0 && (
+                {/* Cast & Crew - Only for movies and Series */}
+                {!isLoading && (item.type === 'movie' || item.type === 'series') && getCast().length > 0 && (
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                       Cast
@@ -756,8 +756,8 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                   </div>
                 )}
 
-                {/* Director/Creator - Only for movies and TV shows */}
-                {!isLoading && (item.type === 'movie' || item.type === 'tvshow') && getDirectorOrCreator() && (
+                {/* Director/Creator - Only for movies and Series */}
+                {!isLoading && (item.type === 'movie' || item.type === 'series') && getDirectorOrCreator() && (
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                       {item.type === 'movie' ? 'Director' : 'Creator'}
@@ -799,7 +799,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                 {/* Loading state covering everything that isn't already on the card:
                     trailer, cast, director/creator, runtime, seasons. Title/poster/date/
                     rating/overview/status-buttons render instantly above regardless. */}
-                {isLoading && (item.type === 'movie' || item.type === 'tvshow') && (
+                {isLoading && (item.type === 'movie' || item.type === 'series') && (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                     <span className="ml-3 text-muted-foreground">Loading trailer, cast &amp; more...</span>
@@ -808,7 +808,7 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
 
                 {/* Additional Info */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  {/* Seasons/Episodes for TV shows */}
+                  {/* Seasons/Episodes for Series */}
                   {detailedData && 'number_of_seasons' in detailedData && (
                     <div>
                       <h4 className="text-sm font-semibold text-muted-foreground mb-1">Seasons</h4>

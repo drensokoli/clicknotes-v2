@@ -3,7 +3,7 @@ import clientPromise from "@/lib/mongodb"
 import bcrypt from "bcryptjs"
 import { validatePassword } from "@/lib/validation"
 
-const db = process.env.MONGODB_DB_NAME || "clicknotes-v2"
+const db = process.env.MONGODB_DB_NAME || "clicknotes"
 
 export async function POST(request: NextRequest) {
   try {

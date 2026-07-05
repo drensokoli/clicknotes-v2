@@ -3,7 +3,15 @@
 import { useState, useEffect } from "react"
 import { Navigation } from "./navigation"
 
-type Section = "movies" | "tvshows" | "books"
+type Section = "movies" | "series" | "books"
+
+// "tvshows" was the URL hash before the Series rename - keep resolving old
+// bookmarks/links to the same section instead of falling through to the default.
+function normalizeSectionHash(hash: string): Section | null {
+  if (hash === "tvshows") return "series"
+  if (hash === "movies" || hash === "series" || hash === "books") return hash
+  return null
+}
 
 interface ClientNavigationProps {
   onSectionChange?: (section: Section) => void
@@ -17,9 +25,9 @@ export function ClientNavigation({ onSectionChange, initialSection }: ClientNavi
 
   // Handle hash changes and section changes
   useEffect(() => {
-    const hash = window.location.hash.slice(1) as Section
-    if (hash && ["movies", "tvshows", "books"].includes(hash)) {
-      setActiveSection(hash)
+    const normalized = normalizeSectionHash(window.location.hash.slice(1))
+    if (normalized) {
+      setActiveSection(normalized)
     } else if (initialSection) {
       setActiveSection(initialSection)
     } else {

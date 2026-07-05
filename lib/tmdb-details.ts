@@ -1,7 +1,7 @@
 import { secureFetch } from './secure-fetch'
 
 // TMDB Genre mapping
-const MOVIE_GENRES: { [key: number]: string } = {
+export const MOVIE_GENRES: { [key: number]: string } = {
   28: 'Action',
   12: 'Adventure',
   16: 'Animation',
@@ -23,7 +23,7 @@ const MOVIE_GENRES: { [key: number]: string } = {
   37: 'Western'
 }
 
-const TV_GENRES: { [key: number]: string } = {
+export const TV_GENRES: { [key: number]: string } = {
   10759: 'Action & Adventure',
   16: 'Animation',
   35: 'Comedy',

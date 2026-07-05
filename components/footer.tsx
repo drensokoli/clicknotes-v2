@@ -19,9 +19,9 @@ const Footer: React.FC = () => {
         <Link
           href="https://github.com/drensokoli/clicknotes-v2"
           target="_blank"
-          aria-label="ClickNotes v2 GitHub Repo"
+          aria-label="ClickNotes GitHub Repo"
         >
-          ClickNotes v2
+          ClickNotes
         </Link>
       </div>
       <div className="text-muted-foreground *:[a]:hover:text-primary text-center text-xs text-balance *:[a]:underline *:[a]:underline-offset-4">

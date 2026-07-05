@@ -5,7 +5,7 @@ import { fetchJSON } from '../../../lib/secure-fetch'
 import { sendEmail } from '../../../lib/email-service'
 import { getOmdbData } from '../../../lib/omdb-helpers'
 import { Book } from '@/components/media-card'
-import { optimizeMovieData, optimizeTVShowData, optimizeBookData } from '../../../lib/data-optimization'
+import { optimizeMovieData, optimizeSeriesData, optimizeBookData } from '../../../lib/data-optimization'
 
 // How many items to enrich (TMDB trailer + OMDB lookup) concurrently per batch during
 // population. Keeps wall-clock time bounded (240 items / 6 ~= 40 batches) while staying
@@ -13,7 +13,7 @@ import { optimizeMovieData, optimizeTVShowData, optimizeBookData } from '../../.
 const ENRICHMENT_BATCH_SIZE = 6
 const ENRICHMENT_BATCH_DELAY_MS = 150
 
-function buildStremioLink(mediaType: 'movie' | 'tvshow', title: string, imdbId: string) {
+function buildStremioLink(mediaType: 'movie' | 'series', title: string, imdbId: string) {
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-')
   const path = mediaType === 'movie' ? 'movie' : 'series'
   return `https://www.strem.io/s/${path}/${slug}-${imdbId.replace('tt', '')}`
@@ -21,7 +21,7 @@ function buildStremioLink(mediaType: 'movie' | 'tvshow', title: string, imdbId: 
 
 // Force dynamic execution to prevent caching issues with Vercel cron jobs
 export const dynamic = 'force-dynamic'
-// Allow the full population run (movies + tvshows + books) to complete in one invocation.
+// Allow the full population run (movies + series + books) to complete in one invocation.
 // Vercel Hobby (Fluid Compute) and Pro both support up to 300s - if this project is capped
 // lower, split populate-all into separate cron-triggered calls per media type instead.
 export const maxDuration = 300
@@ -121,16 +121,16 @@ async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[], force =
   const client = createRedisClient()
   await client.connect()
 
-  const moviesKey = 'movies_v2'
+  const moviesKey = 'movies'
 
   try {
     if (!force && await isFresh(client, moviesKey)) {
-      console.log('[POPULATE] movies_v2 was refreshed within the last week, skipping (pass force to override)')
+      console.log('[POPULATE] movies was refreshed within the last week, skipping (pass force to override)')
       const stored = await client.get(moviesKey)
       return stored ? JSON.parse(stored) : []
     }
 
-    console.log('[POPULATE] Starting movies_v2 population...');
+    console.log('[POPULATE] Starting movies population...');
     console.log('[POPULATE] Fetching minimal movies until we have 240 filtered cards...');
 
     type MovieInput = Parameters<typeof optimizeMovieData>[0]
@@ -244,90 +244,90 @@ async function populateMovies(tmdbApiKey: string, omdbApiKeys: string[], force =
       }
     }
 
-    console.log(`[POPULATE] Final movies_v2 count: ${finalMovies.length}`)
+    console.log(`[POPULATE] Final movies count: ${finalMovies.length}`)
 
     await client.set(moviesKey, JSON.stringify(finalMovies))
     await markUpdated(client, moviesKey)
-    revalidateTag('v2-cards-movies')
+    revalidateTag('cards-movies')
 
     return finalMovies
   } catch (error) {
-    console.error('[POPULATE] Critical error in movies_v2 population:', error)
-    await sendErrorNotification('movies', error as Error, 'Populate movies_v2 key')
+    console.error('[POPULATE] Critical error in movies population:', error)
+    await sendErrorNotification('movies', error as Error, 'Populate movies key')
     throw error
   } finally {
     await client.disconnect()
   }
 }
 
-// Populate TV shows with card payloads that also carry a trimmed trailer + OMDB lookup -
+// Populate series with card payloads that also carry a trimmed trailer + OMDB lookup -
 // same rationale as populateMovies above.
-async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[], force = false) {
+async function populateSeries(tmdbApiKey: string, omdbApiKeys: string[], force = false) {
   const client = createRedisClient()
   await client.connect()
 
-  const tvShowsKey = 'tvshows_v2'
+  const seriesKey = 'series'
 
   try {
-    if (!force && await isFresh(client, tvShowsKey)) {
-      console.log('[POPULATE] tvshows_v2 was refreshed within the last week, skipping (pass force to override)')
-      const stored = await client.get(tvShowsKey)
+    if (!force && await isFresh(client, seriesKey)) {
+      console.log('[POPULATE] series was refreshed within the last week, skipping (pass force to override)')
+      const stored = await client.get(seriesKey)
       return stored ? JSON.parse(stored) : []
     }
 
-    console.log('[POPULATE] Starting tvshows_v2 population...');
-    console.log('[POPULATE] Fetching minimal TV shows until we have 240 filtered cards...');
+    console.log('[POPULATE] Starting series population...');
+    console.log('[POPULATE] Fetching minimal series until we have 240 filtered cards...');
 
-    type TVInput = Parameters<typeof optimizeTVShowData>[0]
-    type TVCard = ReturnType<typeof optimizeTVShowData>
-    interface CandidateTVShow {
+    type SeriesInput = Parameters<typeof optimizeSeriesData>[0]
+    type SeriesCard = ReturnType<typeof optimizeSeriesData>
+    interface CandidateSeries {
       id: number; name: string; overview: string; poster_path: string | null
       backdrop_path: string | null; first_air_date: string; vote_average: number; vote_count: number
     }
 
-    const candidates: CandidateTVShow[] = []
+    const candidates: CandidateSeries[] = []
     const seenIds = new Set<number>()
     let totalProcessed = 0
     let done = false
 
     for (let page = 1; page <= 20 && !done; page++) {
-      console.log(`[POPULATE] Fetching TV shows page ${page}/20...`)
+      console.log(`[POPULATE] Fetching series page ${page}/20...`)
 
       const url = `https://api.themoviedb.org/3/tv/popular?api_key=${tmdbApiKey}&language=en-US&page=${page}`
-      const tvShowsData = await fetchJSON(url)
+      const seriesData = await fetchJSON(url)
 
-      if (!tvShowsData || !tvShowsData.results) {
+      if (!seriesData || !seriesData.results) {
         console.warn(`[POPULATE] Page ${page}: Invalid response structure`)
         continue
       }
 
-      for (let i = 0; i < tvShowsData.results.length; i++) {
+      for (let i = 0; i < seriesData.results.length; i++) {
         if (candidates.length >= 240) {
           done = true
           break
         }
 
-        const tvShow = tvShowsData.results[i]
+        const series = seriesData.results[i]
         totalProcessed++
 
-        if (seenIds.has(tvShow.id)) continue
-        seenIds.add(tvShow.id)
+        if (seenIds.has(series.id)) continue
+        seenIds.add(series.id)
 
-        const description = (tvShow.overview || '').toLowerCase()
-        const title = (tvShow.name || '').toLowerCase()
+        const description = (series.overview || '').toLowerCase()
+        const title = (series.name || '').toLowerCase()
 
         if (isEroticContent(title, description)) continue
-        if (!meetsQualityStandards(tvShow.vote_average, tvShow.vote_count || 0)) continue
+        if (!meetsQualityStandards(series.vote_average, series.vote_count || 0)) continue
 
         candidates.push({
-          id: tvShow.id,
-          name: tvShow.name,
-          overview: tvShow.overview,
-          poster_path: tvShow.poster_path,
-          backdrop_path: tvShow.backdrop_path,
-          first_air_date: tvShow.first_air_date,
-          vote_average: tvShow.vote_average,
-          vote_count: tvShow.vote_count ?? 0,
+          id: series.id,
+          name: series.name,
+          overview: series.overview,
+          poster_path: series.poster_path,
+          backdrop_path: series.backdrop_path,
+          first_air_date: series.first_air_date,
+          vote_average: series.vote_average,
+          vote_count: series.vote_count ?? 0,
         })
       }
 
@@ -339,17 +339,17 @@ async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[], force 
     console.log(`[POPULATE] Total processed: ${totalProcessed}`)
     console.log(`[POPULATE] Enriching ${candidates.length} candidates with trailer + OMDB data...`)
 
-    const finalTVShows: TVCard[] = []
+    const finalSeries: SeriesCard[] = []
     for (let i = 0; i < candidates.length; i += ENRICHMENT_BATCH_SIZE) {
       const batch = candidates.slice(i, i + ENRICHMENT_BATCH_SIZE)
-      const enriched = await Promise.all(batch.map(async (tvShow) => {
-        let details: TVInput['details']
-        let omdbData: TVInput['omdbData']
+      const enriched = await Promise.all(batch.map(async (series) => {
+        let details: SeriesInput['details']
+        let omdbData: SeriesInput['omdbData']
         let stremioLink: string | undefined
 
         try {
           const tmdbDetails = await fetchJSON(
-            `https://api.themoviedb.org/3/tv/${tvShow.id}?api_key=${tmdbApiKey}&append_to_response=videos`
+            `https://api.themoviedb.org/3/tv/${series.id}?api_key=${tmdbApiKey}&append_to_response=videos`
           )
           details = {
             genres: tmdbDetails.genres || [],
@@ -361,43 +361,43 @@ async function populateTVShows(tmdbApiKey: string, omdbApiKeys: string[], force 
             videos: tmdbDetails.videos || { results: [] },
           }
         } catch (error) {
-          console.warn(`[POPULATE] Trailer fetch failed for TV show ${tvShow.id}:`, error)
+          console.warn(`[POPULATE] Trailer fetch failed for series ${series.id}:`, error)
         }
 
         try {
-          if (tvShow.first_air_date) {
-            const year = tvShow.first_air_date.split('-')[0]
-            const omdb = await getOmdbData(omdbApiKeys, tvShow.name, year, 'series')
+          if (series.first_air_date) {
+            const year = series.first_air_date.split('-')[0]
+            const omdb = await getOmdbData(omdbApiKeys, series.name, year, 'series')
             if (omdb) omdbData = omdb
           }
         } catch (error) {
-          console.warn(`[POPULATE] OMDB fetch failed for TV show ${tvShow.id}:`, error)
+          console.warn(`[POPULATE] OMDB fetch failed for series ${series.id}:`, error)
         }
 
         if (omdbData?.imdbId) {
-          stremioLink = buildStremioLink('tvshow', tvShow.name, omdbData.imdbId)
+          stremioLink = buildStremioLink('series', series.name, omdbData.imdbId)
         }
 
-        return optimizeTVShowData({ ...tvShow, details, omdbData, stremioLink } as TVInput)
+        return optimizeSeriesData({ ...series, details, omdbData, stremioLink } as SeriesInput)
       }))
 
-      finalTVShows.push(...enriched)
+      finalSeries.push(...enriched)
 
       if (i + ENRICHMENT_BATCH_SIZE < candidates.length) {
         await delay(ENRICHMENT_BATCH_DELAY_MS)
       }
     }
 
-    console.log(`[POPULATE] Final tvshows_v2 count: ${finalTVShows.length}`)
+    console.log(`[POPULATE] Final series count: ${finalSeries.length}`)
 
-    await client.set(tvShowsKey, JSON.stringify(finalTVShows))
-    await markUpdated(client, tvShowsKey)
-    revalidateTag('v2-cards-tvshows')
+    await client.set(seriesKey, JSON.stringify(finalSeries))
+    await markUpdated(client, seriesKey)
+    revalidateTag('cards-series')
 
-    return finalTVShows
+    return finalSeries
   } catch (error) {
-    console.error('[POPULATE] Critical error in tvshows_v2 population:', error)
-    await sendErrorNotification('tvshows', error as Error, 'Populate tvshows_v2 key')
+    console.error('[POPULATE] Critical error in series population:', error)
+    await sendErrorNotification('series', error as Error, 'Populate series key')
     throw error
   } finally {
     await client.disconnect()
@@ -409,16 +409,16 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string, f
   const client = createRedisClient()
   await client.connect()
 
-  const booksKey = 'books_v2'
+  const booksKey = 'books'
 
   try {
     if (!force && await isFresh(client, booksKey)) {
-      console.log('[POPULATE] books_v2 was refreshed within the last week, skipping (pass force to override)')
+      console.log('[POPULATE] books was refreshed within the last week, skipping (pass force to override)')
       const stored = await client.get(booksKey)
       return stored ? JSON.parse(stored) : []
     }
 
-    console.log('[POPULATE] Starting books_v2 population...');
+    console.log('[POPULATE] Starting books population...');
     console.log('[POPULATE] Fetching NY Times full overview...');
 
     const nyTimesUrl = `https://api.nytimes.com/svc/books/v3/lists/full-overview.json?api-key=${nyTimesApiKey}`;
@@ -544,16 +544,16 @@ async function populateBooks(googleBooksApiKey: string, nyTimesApiKey: string, f
     const targetBookCount = Math.floor(booksWithDetails.length / 40) * 40;
     const finalBooks = booksWithDetails.slice(0, targetBookCount);
 
-    console.log(`[POPULATE] Final books_v2 count: ${finalBooks.length}`);
+    console.log(`[POPULATE] Final books count: ${finalBooks.length}`);
 
     await client.set(booksKey, JSON.stringify(finalBooks));
     await markUpdated(client, booksKey);
-    revalidateTag('v2-cards-books')
+    revalidateTag('cards-books')
 
     return finalBooks;
   } catch (error) {
-    console.error('[POPULATE] Critical error in books_v2 population:', error);
-    await sendErrorNotification('books', error as Error, 'Populate books_v2 key');
+    console.error('[POPULATE] Critical error in books population:', error);
+    await sendErrorNotification('books', error as Error, 'Populate books key');
     throw error;
   } finally {
     await client.disconnect();
@@ -600,10 +600,10 @@ async function sendErrorNotification(mediaType: string, error: Error | string, o
             </a>
           ` : ''}
 
-          ${mediaType === 'tvshows' || mediaType === 'general' ? `
+          ${mediaType === 'series' || mediaType === 'general' ? `
             <a href="https://yourdomain.com/retry-population"
                style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 10px 10px 0; font-weight: 500;">
-              🔄 Retry TV Shows Population
+              🔄 Retry Series Population
             </a>
           ` : ''}
 
@@ -679,22 +679,22 @@ async function populateAll(force = false) {
     populateBooks(googleBooksApiKey, nyTimesApiKey, force)
   ]);
 
-  // Populate TV shows after movies to reduce TMDB rate-limit pressure
-  const tvShowsStartTime = Date.now();
-  const tvShows = await populateTVShows(tmdbApiKey, omdbApiKeys, force);
-  const tvShowsDuration = Date.now() - tvShowsStartTime;
+  // Populate series after movies to reduce TMDB rate-limit pressure
+  const seriesStartTime = Date.now();
+  const series = await populateSeries(tmdbApiKey, omdbApiKeys, force);
+  const seriesDuration = Date.now() - seriesStartTime;
 
   const totalDuration = Date.now() - startTime;
 
   console.log('[POPULATE] Complete data population finished!', {
     movies: movies.length,
-    tvshows: tvShows.length,
+    series: series.length,
     books: books.length,
     totalDuration: `${totalDuration}ms`,
-    tvShowsDuration: `${tvShowsDuration}ms`,
+    seriesDuration: `${seriesDuration}ms`,
   });
 
-  return { movies, tvShows, books, totalDuration, tvShowsDuration };
+  return { movies, series, books, totalDuration, seriesDuration };
 }
 
 export async function GET(request: NextRequest) {
@@ -705,15 +705,15 @@ export async function GET(request: NextRequest) {
       vercelCron: request.headers.get('x-vercel-cron')
     });
 
-    const { movies, tvShows, books, totalDuration, tvShowsDuration } = await populateAll();
+    const { movies, series, books, totalDuration, seriesDuration } = await populateAll();
 
     return NextResponse.json({
       message: 'Cron job completed - data populated successfully',
       movies: movies.length,
-      tvshows: tvShows.length,
+      series: series.length,
       books: books.length,
       totalDuration: `${totalDuration}ms`,
-      tvShowsDuration: `${tvShowsDuration}ms`,
+      seriesDuration: `${seriesDuration}ms`,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -736,15 +736,15 @@ export async function POST(request: NextRequest) {
     console.log(`[POST] Processing action: ${action}${force ? ' (forced)' : ''}`);
 
     if (action === 'populate-all') {
-      const { movies, tvShows, books, totalDuration, tvShowsDuration } = await populateAll(!!force);
+      const { movies, series, books, totalDuration, seriesDuration } = await populateAll(!!force);
 
       return NextResponse.json({
         message: 'Data populated successfully',
         movies: movies.length,
-        tvshows: tvShows.length,
+        series: series.length,
         books: books.length,
         totalDuration: `${totalDuration}ms`,
-        tvShowsDuration: `${tvShowsDuration}ms`,
+        seriesDuration: `${seriesDuration}ms`,
       });
     } else if (action === 'populate-movies') {
       const tmdbApiKey = process.env.TMDB_API_KEY!
@@ -762,7 +762,7 @@ export async function POST(request: NextRequest) {
         movies: movies.length,
         duration: `${duration}ms`,
       });
-    } else if (action === 'populate-tvshows') {
+    } else if (action === 'populate-series') {
       const tmdbApiKey = process.env.TMDB_API_KEY!
       const omdbApiKeys = [
         process.env.OMDB_API_KEY_1!,
@@ -770,12 +770,12 @@ export async function POST(request: NextRequest) {
         process.env.OMDB_API_KEY_3!,
       ]
       const startTime = Date.now();
-      const tvShows = await populateTVShows(tmdbApiKey, omdbApiKeys, !!force);
+      const series = await populateSeries(tmdbApiKey, omdbApiKeys, !!force);
       const duration = Date.now() - startTime;
 
       return NextResponse.json({
-        message: 'TV shows populated successfully',
-        tvshows: tvShows.length,
+        message: 'Series populated successfully',
+        series: series.length,
         duration: `${duration}ms`,
       });
     } else if (action === 'populate-books') {
@@ -793,7 +793,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('[POST] Invalid action received:', action);
-    console.log('[POST] Valid actions are: populate-all, populate-movies, populate-tvshows, populate-books');
+    console.log('[POST] Valid actions are: populate-all, populate-movies, populate-series, populate-books');
 
     return NextResponse.json({ message: 'Invalid action' }, { status: 400 })
   } catch (error) {

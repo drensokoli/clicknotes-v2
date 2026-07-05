@@ -1,57 +1,57 @@
 import "./setup" // Setup SSL configuration first
 import { MainContent } from "@/components/main-content"
-import { fetchPopularMoviesWithFetch, fetchPopularTVShowsWithFetch, fetchBestsellersWithFetch } from "@/lib/fetch-helpers"
-import { fallbackMovies, fallbackTVShows, fallbackBooks } from "@/lib/fallback-data"
+import { fetchPopularMoviesWithFetch, fetchPopularSeriesWithFetch, fetchBestsellersWithFetch } from "@/lib/fetch-helpers"
+import { fallbackMovies, fallbackSeries, fallbackBooks } from "@/lib/fallback-data"
 import type { Metadata } from "next"
-import type { Movie, TVShow, Book } from "@/components/media-card"
+import type { Movie, Series, Book } from "@/components/media-card"
 
 // Force static generation with revalidation
 export const revalidate = 604800 // 7 days in seconds
 
 export const metadata: Metadata = {
-  title: "ClickNotes v2 - Save Movies, TV Shows & Books",
-  description: "Discover and organize your favorite movies, TV shows, and books in one beautiful interface. Browse popular content and search for your favorites.",
-  keywords: ["movies", "tv shows", "books", "entertainment", "discover", "organize"],
+  title: "ClickNotes - Save Movies, Series & Books",
+  description: "Discover and organize your favorite movies, Series, and books in one beautiful interface. Browse popular content and search for your favorites.",
+  keywords: ["movies", "series", "books", "entertainment", "discover", "organize"],
   authors: [{ name: "Dren Sokoli" }],
   openGraph: {
-    title: "ClickNotes v2 - Save Movies, TV Shows & Books",
-    description: "Discover and organize your favorite movies, TV shows, and books in one beautiful interface.",
+    title: "ClickNotes - Save Movies, Series & Books",
+    description: "Discover and organize your favorite movies, Series, and books in one beautiful interface.",
     type: "website",
-    siteName: "ClickNotes v2"
+    siteName: "ClickNotes"
   },
   twitter: {
     card: "summary_large_image",
-    title: "ClickNotes v2 - Save Movies, TV Shows & Books",
-    description: "Discover and organize your favorite movies, TV shows, and books in one beautiful interface.",
+    title: "ClickNotes - Save Movies, Series & Books",
+    description: "Discover and organize your favorite movies, Series, and books in one beautiful interface.",
   }
 }
 
-// Fetch the first 40 v2 cards for a media type directly from Redis.
+// Fetch the first 40 cards for a media type directly from Redis.
 // Redis stores only minimal card fields; the modal fetches full details on demand.
 async function fetchInitialCards(baseUrl: string, mediaType: string) {
   try {
     const response = await fetch(
-      `${baseUrl}/api/redisHandler?type=v2-range&mediaType=${mediaType}&start=0&end=39`,
+      `${baseUrl}/api/redisHandler?type=range&mediaType=${mediaType}&start=0&end=39`,
       // Cache for 7 days, but tagged so /api/cron can bust this the moment it writes fresh
       // data to Redis - otherwise a stale (or empty) response gets stuck for the full week.
-      { next: { revalidate: 60 * 60 * 24 * 7, tags: [`v2-cards-${mediaType}`] } }
+      { next: { revalidate: 60 * 60 * 24 * 7, tags: [`cards-${mediaType}`] } }
     )
 
     if (!response.ok) {
-      console.error(`❌ Failed to fetch v2-range cards for ${mediaType}`)
+      console.error(`❌ Failed to fetch cards for ${mediaType}`)
       return null
     }
 
     const data = await response.json()
 
     if (!data.success || !Array.isArray(data.items) || data.items.length === 0) {
-      console.log(`⚠️ No ${mediaType} v2 cards found`)
+      console.log(`⚠️ No ${mediaType} cards found`)
       return null
     }
 
     return data.items
   } catch (error) {
-    console.error(`❌ Error fetching ${mediaType} v2 cards:`, error)
+    console.error(`❌ Error fetching ${mediaType} cards:`, error)
     return null
   }
 }
@@ -70,40 +70,40 @@ export default async function Home() {
   ]
 
   let movies: Movie[] = []
-  let tvShows: TVShow[] = []
+  let series: Series[] = []
   let books: Book[] = []
   
   // Track which Redis keys have been fetched for progressive loading
   const redisKeysFetched = {
     movies: 1, // Start with movies1
-    tvshows: 1, // Start with tvshows1
+    series: 1, // Start with series1
     books: 1   // Start with books1
   }
 
   // Rankings are no longer populated server-side; kept as empty arrays for the props contract.
   const movieRanking: Array<{value: string, score: number}> = [];
-  const tvShowRanking: Array<{value: string, score: number}> = [];
+  const seriesRanking: Array<{value: string, score: number}> = [];
   const bookRanking: Array<{value: string, score: number}> = [];
 
   try {
     console.log('🚀 Starting data fetch for server-side props...')
 
-    // Fetch the first 20 items from each media type directly from Redis (v2 cards)
-    const [dataMovies, dataTVShows, dataBooks] = await Promise.allSettled([
+    // Fetch the first 20 items from each media type directly from Redis
+    const [dataMovies, dataSeries, dataBooks] = await Promise.allSettled([
       fetchInitialCards(baseUrl, 'movies'),
-      fetchInitialCards(baseUrl, 'tvshows'),
+      fetchInitialCards(baseUrl, 'series'),
       fetchInitialCards(baseUrl, 'books'),
     ])
 
     // Check if data is available for each type
     const hasMovies = dataMovies.status === 'fulfilled' && dataMovies.value
-    const hasTVShows = dataTVShows.status === 'fulfilled' && dataTVShows.value
+    const hasSeries = dataSeries.status === 'fulfilled' && dataSeries.value
     const hasBooks = dataBooks.status === 'fulfilled' && dataBooks.value
 
     // Use data where available, fall back to APIs for missing data
-    if (hasMovies && hasTVShows && hasBooks) {
+    if (hasMovies && hasSeries && hasBooks) {
       movies = Array.isArray(dataMovies.value) ? dataMovies.value.map(movie => ({ ...movie, type: "movie" as const })) : []
-      tvShows = Array.isArray(dataTVShows.value) ? dataTVShows.value.map(tvShow => ({ ...tvShow, type: "tvshow" as const })) : []
+      series = Array.isArray(dataSeries.value) ? dataSeries.value.map(series => ({ ...series, type: "series" as const })) : []
       books = Array.isArray(dataBooks.value) ? dataBooks.value.map(book => ({ ...book, type: "book" as const })) : []
     } else {
       // Some data is missing, fetch missing data from APIs
@@ -112,29 +112,29 @@ export default async function Home() {
       // Use data where available, fetch from APIs where missing, and ensure arrays (not null)
       // For fallback API calls, only fetch 60 items to keep data manageable
       movies = hasMovies && Array.isArray(dataMovies.value) ? dataMovies.value.map(movie => ({ ...movie, type: "movie" as const })) : (await fetchPopularMoviesWithFetch(tmdbApiKey) || []).map(movie => ({ ...movie, type: "movie" as const }))
-      tvShows = hasTVShows && Array.isArray(dataTVShows.value) ? dataTVShows.value.map(tvShow => ({ ...tvShow, type: "tvshow" as const })) : (await fetchPopularTVShowsWithFetch(tmdbApiKey) || []).map(tvShow => ({ ...tvShow, type: "tvshow" as const }))
+      series = hasSeries && Array.isArray(dataSeries.value) ? dataSeries.value.map(series => ({ ...series, type: "series" as const })) : (await fetchPopularSeriesWithFetch(tmdbApiKey) || []).map(series => ({ ...series, type: "series" as const }))
       books = hasBooks && Array.isArray(dataBooks.value) ? dataBooks.value.map(book => ({ ...book, type: "book" as const })) : (await fetchBestsellersWithFetch(googleBooksApiKey, nyTimesApiKey, baseUrl) || []).map(book => ({ ...book, type: "book" as const }))
 
       // Limit fallback API data to 60 items maximum
       if (!hasMovies && movies && movies.length > 60) {
         movies = movies.slice(0, 60);
       }
-      if (!hasTVShows && tvShows && tvShows.length > 60) {
-        tvShows = tvShows.slice(0, 60);
+      if (!hasSeries && series && series.length > 60) {
+        series = series.slice(0, 60);
       }
       if (!hasBooks && books && books.length > 60) {
         books = books.slice(0, 60);
       }
 
       if (!hasMovies && !movies) movies = fallbackMovies.map(movie => ({ ...movie, type: "movie" as const }))
-      if (!hasTVShows && !tvShows) tvShows = fallbackTVShows.map(tvShow => ({ ...tvShow, type: "tvshow" as const }))
+      if (!hasSeries && !series) series = fallbackSeries.map(series => ({ ...series, type: "series" as const }))
       if (!hasBooks && !books) books = fallbackBooks.map(book => ({ ...book, type: "book" as const }))
     }
   } catch (error) {
     console.error('❌ Error fetching initial data:', error)
     // Use fallback data if all methods fail, but limit to 60 items maximum
     movies = fallbackMovies.slice(0, 60).map(movie => ({ ...movie, type: "movie" as const }))
-    tvShows = fallbackTVShows.slice(0, 60).map(tvShow => ({ ...tvShow, type: "tvshow" as const }))
+    series = fallbackSeries.slice(0, 60).map(series => ({ ...series, type: "series" as const }))
     books = fallbackBooks.slice(0, 60).map(book => ({ ...book, type: "book" as const }))
   }
 
@@ -151,10 +151,10 @@ export default async function Home() {
       <div className="relative z-10">
               <MainContent
         initialMovies={movies}
-        initialTVShows={tvShows}
+        initialSeries={series}
         initialBooks={books}
         movieRanking={movieRanking}
-        tvShowRanking={tvShowRanking}
+        seriesRanking={seriesRanking}
         bookRanking={bookRanking}
         tmdbApiKey={tmdbApiKey}
         googleBooksApiKey={googleBooksApiKey}
