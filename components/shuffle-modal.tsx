@@ -140,13 +140,13 @@ export function ShuffleModal({ items, defaultStatus, initialType, initialGenres,
       />
 
       <motion.div
-        className="relative w-full max-w-lg bg-surface rounded-2xl shadow-2xl overflow-hidden"
+        className="relative w-full max-w-lg bg-surface rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
         initial={{ opacity: 0, scale: 0.95, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ duration: 0.2 }}
       >
-        <div className="flex items-center justify-between px-5 sm:px-6 py-3 border-b border-border/30">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3 border-b border-border/30 shrink-0">
           <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
             <ShuffleIcon className="w-4 h-4" />
             Shuffle
@@ -161,6 +161,10 @@ export function ShuffleModal({ items, defaultStatus, initialType, initialGenres,
           )}
         </div>
 
+        {/* Scrolls independently of the header above - needed for the filter
+            phase, which can grow past the viewport (e.g. Books has many more
+            distinct genres than movies/series). */}
+        <div className="overflow-y-auto min-h-0">
         <AnimatePresence mode="wait">
           {phase === "filter" && (
             <motion.div
@@ -334,6 +338,7 @@ export function ShuffleModal({ items, defaultStatus, initialType, initialGenres,
             </motion.div>
           )}
         </AnimatePresence>
+        </div>
       </motion.div>
     </div>
   )
