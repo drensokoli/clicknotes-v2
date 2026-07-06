@@ -21,6 +21,10 @@ import {
   computeAvailableEras,
   matchesGenres,
   matchesEras,
+  matchesRating,
+  matchesRuntime,
+  RUNTIME_MAX,
+  PAGES_MAX,
 } from "@/lib/library-filters"
 
 interface SavedListProps {
@@ -76,6 +80,18 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
     const e = searchParams.get("era")
     return e ? new Set(e.split(",").map(Number).filter((n) => !Number.isNaN(n))) : new Set()
   })
+  const [minRating, setMinRating] = useState(() => {
+    const r = Number(searchParams.get("minRating"))
+    return Number.isFinite(r) && r > 0 ? r : 0
+  })
+  const [maxRuntime, setMaxRuntime] = useState(() => {
+    const r = Number(searchParams.get("maxRuntime"))
+    return Number.isFinite(r) && r > 0 ? r : RUNTIME_MAX
+  })
+  const [maxPages, setMaxPages] = useState(() => {
+    const p = Number(searchParams.get("maxPages"))
+    return Number.isFinite(p) && p > 0 ? p : PAGES_MAX
+  })
   const [searchQuery, setSearchQuery] = useState("")
   const [shuffleOpen, setShuffleOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -97,15 +113,21 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
     params.set("status", STATUS_TO_SLUG[activeTab])
     if (selectedGenres.size > 0) params.set("genre", Array.from(selectedGenres).join(","))
     if (selectedEras.size > 0) params.set("era", Array.from(selectedEras).join(","))
+    if (minRating > 0) params.set("minRating", String(minRating))
+    if (maxRuntime < RUNTIME_MAX) params.set("maxRuntime", String(maxRuntime))
+    if (maxPages < PAGES_MAX) params.set("maxPages", String(maxPages))
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typeFilter, activeTab, selectedGenres, selectedEras, pathname])
+  }, [typeFilter, activeTab, selectedGenres, selectedEras, minRating, maxRuntime, maxPages, pathname])
 
   const handleTypeChange = (type: MediaType) => {
     setTypeFilter(type)
     setSelectedGenres(new Set())
     setSelectedEras(new Set())
+    setMinRating(0)
+    setMaxRuntime(RUNTIME_MAX)
+    setMaxPages(PAGES_MAX)
   }
 
   // Effective status: show the server-provided status until the provider has loaded
@@ -118,7 +140,11 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
   const availableEras = computeAvailableEras(typeMatchedItems)
 
   const filteredItems = typeMatchedItems.filter(
-    (item) => matchesGenres(item, selectedGenres) && matchesEras(item, selectedEras),
+    (item) =>
+      matchesGenres(item, selectedGenres) &&
+      matchesEras(item, selectedEras) &&
+      matchesRating(item, minRating) &&
+      matchesRuntime(item, maxRuntime, maxPages),
   )
 
   const countsByStatus: Record<SavedStatus, number> = {
@@ -224,6 +250,12 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
               availableEras={availableEras}
               selectedEras={selectedEras}
               onErasChange={setSelectedEras}
+              minRating={minRating}
+              onMinRatingChange={setMinRating}
+              maxRuntime={maxRuntime}
+              onMaxRuntimeChange={setMaxRuntime}
+              maxPages={maxPages}
+              onMaxPagesChange={setMaxPages}
             />
 
             <div ref={gridScrollRef} className="flex-1 min-w-0 md:h-full md:overflow-y-auto md:pr-3">
@@ -270,6 +302,9 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
           initialType={typeFilter}
           initialGenres={selectedGenres}
           initialEras={selectedEras}
+          initialMinRating={minRating}
+          initialMaxRuntime={maxRuntime}
+          initialMaxPages={maxPages}
           onClose={() => setShuffleOpen(false)}
         />
       )}

@@ -8,17 +8,20 @@ import type { MediaType, SavedStatus } from "./saved-media-provider"
 import { MediaCard, type MediaItem } from "./media-card"
 import {
   type SavedItem,
-  getRating,
   getTitle,
   getPosterUrl,
-  getRuntime,
-  getPageCount,
   decadeLabel,
   computeAvailableGenres,
   computeAvailableEras,
   matchesGenres,
   matchesEras,
+  matchesRating,
+  matchesRuntime,
   pillClass,
+  RUNTIME_MIN,
+  RUNTIME_MAX,
+  PAGES_MIN,
+  PAGES_MAX,
 } from "@/lib/library-filters"
 import { PillGroup } from "./pill-group"
 
@@ -28,6 +31,9 @@ interface ShuffleModalProps {
   initialType: MediaType
   initialGenres?: Set<string>
   initialEras?: Set<number>
+  initialMinRating?: number
+  initialMaxRuntime?: number
+  initialMaxPages?: number
   onClose: () => void
 }
 
@@ -43,11 +49,6 @@ const STATUS_OPTIONS: { key: SavedStatus; label: string }[] = [
   { key: "watched", label: "Completed" },
 ]
 
-const RUNTIME_MIN = 60
-const RUNTIME_MAX = 240
-const PAGES_MIN = 100
-const PAGES_MAX = 1000
-
 // Must match the strip item's className (w-28 = 112px) and the strip container's
 // gap-3 (12px) - used to compute exactly where a card's center lands relative to
 // the fixed viewport-center indicator. A mismatch here is what causes the spin to
@@ -56,7 +57,17 @@ const CARD_WIDTH = 112
 const CARD_GAP = 12
 const CARD_PITCH = CARD_WIDTH + CARD_GAP
 
-export function ShuffleModal({ items, defaultStatus, initialType, initialGenres, initialEras, onClose }: ShuffleModalProps) {
+export function ShuffleModal({
+  items,
+  defaultStatus,
+  initialType,
+  initialGenres,
+  initialEras,
+  initialMinRating,
+  initialMaxRuntime,
+  initialMaxPages,
+  onClose,
+}: ShuffleModalProps) {
   const [phase, setPhase] = useState<"filter" | "spinning" | "result">("filter")
   const [typeFilter, setTypeFilter] = useState<MediaType>(initialType)
   const [statusFilter, setStatusFilter] = useState<SavedStatus>(defaultStatus)
@@ -64,9 +75,9 @@ export function ShuffleModal({ items, defaultStatus, initialType, initialGenres,
   // doesn't write back to the Library's own filter state).
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(() => new Set(initialGenres))
   const [selectedEras, setSelectedEras] = useState<Set<number>>(() => new Set(initialEras))
-  const [minRating, setMinRating] = useState(0)
-  const [maxRuntime, setMaxRuntime] = useState(RUNTIME_MAX)
-  const [maxPages, setMaxPages] = useState(PAGES_MAX)
+  const [minRating, setMinRating] = useState(initialMinRating ?? 0)
+  const [maxRuntime, setMaxRuntime] = useState(initialMaxRuntime ?? RUNTIME_MAX)
+  const [maxPages, setMaxPages] = useState(initialMaxPages ?? PAGES_MAX)
 
   const typeMatched = useMemo(
     () => items.filter((i) => i.mediaType === typeFilter),
@@ -84,23 +95,11 @@ export function ShuffleModal({ items, defaultStatus, initialType, initialGenres,
       if (item.status !== statusFilter) return false
       if (!matchesGenres(item, selectedGenres)) return false
       if (!matchesEras(item, selectedEras)) return false
-
-      const rating = getRating(item)
-      if (minRating > 0 && (rating === null || rating < minRating)) return false
-
-      if (typeFilter === "book") {
-        if (maxPages < PAGES_MAX) {
-          const pages = getPageCount(item)
-          if (pages !== null && pages > maxPages) return false
-        }
-      } else if (maxRuntime < RUNTIME_MAX) {
-        const runtime = getRuntime(item)
-        if (runtime !== null && runtime > maxRuntime) return false
-      }
-
+      if (!matchesRating(item, minRating)) return false
+      if (!matchesRuntime(item, maxRuntime, maxPages)) return false
       return true
     })
-  }, [typeMatched, statusFilter, selectedGenres, selectedEras, minRating, maxRuntime, maxPages, typeFilter])
+  }, [typeMatched, statusFilter, selectedGenres, selectedEras, minRating, maxRuntime, maxPages])
 
   // Built once we start spinning, so the strip doesn't re-shuffle mid-animation.
   const [strip, setStrip] = useState<SavedItem[]>([])

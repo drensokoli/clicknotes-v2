@@ -47,6 +47,9 @@ export interface SavedCard {
   genre_ids?: number[]
   details?: {
     runtime?: number
+    // series only - per-episode runtime(s) in minutes, from TMDB's tv details
+    // endpoint. getRuntime() in lib/library-filters.ts reads the first entry.
+    episode_run_time?: number[]
     genres?: Array<{ id: number; name: string }>
     number_of_seasons?: number
     number_of_episodes?: number

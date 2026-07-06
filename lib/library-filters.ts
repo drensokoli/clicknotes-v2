@@ -66,11 +66,19 @@ export function getPosterUrl(item: SavedItem): string | null {
   return item.card.poster_path ? `https://image.tmdb.org/t/p/w342${item.card.poster_path}` : null
 }
 
-// Movies only - series episodes and books have no comparable single "runtime"
-// field in our saved-card data, so the runtime filter is a pass-through for them.
+// Movies use a single `runtime`; series use their typical per-episode runtime
+// (the first entry of `episode_run_time` - TMDB returns it as an array since it
+// can vary across a show's history, but one representative value is enough for
+// filtering). Books have no comparable field, so this is a pass-through for them.
 export function getRuntime(item: SavedItem): number | null {
-  if (item.mediaType !== "movie") return null
-  return typeof item.card.details?.runtime === "number" ? item.card.details.runtime : null
+  if (item.mediaType === "movie") {
+    return typeof item.card.details?.runtime === "number" ? item.card.details.runtime : null
+  }
+  if (item.mediaType === "series") {
+    const episodeRuntime = item.card.details?.episode_run_time?.[0]
+    return typeof episodeRuntime === "number" ? episodeRuntime : null
+  }
+  return null
 }
 
 export function getPageCount(item: SavedItem): number | null {
@@ -123,6 +131,30 @@ export function matchesEras(item: SavedItem, selectedEras: Set<number>): boolean
   if (selectedEras.size === 0) return true
   const year = getYear(item)
   return year !== null && selectedEras.has(getDecade(year))
+}
+
+export function matchesRating(item: SavedItem, minRating: number): boolean {
+  if (minRating <= 0) return true
+  const rating = getRating(item)
+  return rating !== null && rating >= minRating
+}
+
+// Movies/series use `maxRuntime` (minutes), books use `maxPages` - whichever
+// applies to the item's type, at its own "no cap" ceiling (RUNTIME_MAX/PAGES_MAX).
+export const RUNTIME_MIN = 60
+export const RUNTIME_MAX = 240
+export const PAGES_MIN = 100
+export const PAGES_MAX = 1000
+
+export function matchesRuntime(item: SavedItem, maxRuntime: number, maxPages: number): boolean {
+  if (item.mediaType === "book") {
+    if (maxPages >= PAGES_MAX) return true
+    const pages = getPageCount(item)
+    return pages === null || pages <= maxPages
+  }
+  if (maxRuntime >= RUNTIME_MAX) return true
+  const runtime = getRuntime(item)
+  return runtime === null || runtime <= maxRuntime
 }
 
 // Shared pill button styling used by both the Library sidebar and the Shuffle modal.

@@ -60,6 +60,7 @@ export interface OptimizedSeries {
   type: "series";
   details?: {
     genres: Array<{ id: number; name: string }>;
+    episode_run_time?: number[];
     number_of_seasons: number;
     number_of_episodes: number;
     status: string;
@@ -164,6 +165,7 @@ interface RawMovie {
 
 interface RawTVDetails {
   genres?: Array<{ id: number; name: string }>;
+  episode_run_time?: number[];
   number_of_seasons: number;
   number_of_episodes: number;
   status: string;
@@ -319,6 +321,7 @@ export function optimizeSeriesData(series: RawSeries): OptimizedSeries {
   if (series.details) {
     optimized.details = {
       genres: series.details.genres || [],
+      episode_run_time: series.details.episode_run_time || [],
       number_of_seasons: series.details.number_of_seasons,
       number_of_episodes: series.details.number_of_episodes,
       status: series.details.status,

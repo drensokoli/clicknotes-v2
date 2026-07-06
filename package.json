@@ -16,6 +16,7 @@
     "backfill-saved-genres": "node scripts/backfill-saved-genres.js",
     "migrate-notion-to-mongo": "node scripts/migrate-notion-to-mongo.js",
     "backfill-book-categories": "node scripts/backfill-book-categories.js",
+    "backfill-runtime": "node scripts/backfill-runtime.js",
     "send-v2-launch-email": "node scripts/send-v2-launch-email.js",
     "test-ssl": "node scripts/test-ssl.js"
   },

@@ -353,6 +353,7 @@ async function populateSeries(tmdbApiKey: string, omdbApiKeys: string[], force =
           )
           details = {
             genres: tmdbDetails.genres || [],
+            episode_run_time: tmdbDetails.episode_run_time || [],
             number_of_seasons: tmdbDetails.number_of_seasons,
             number_of_episodes: tmdbDetails.number_of_episodes,
             status: tmdbDetails.status,

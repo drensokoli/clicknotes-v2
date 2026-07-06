@@ -31,6 +31,12 @@ export function useSavedMedia() {
 
 const keyOf = (type: MediaType, id: string | number) => `${type}:${id}`
 
+const STATUS_LABELS: Record<SavedStatus, string> = {
+  to_watch: "Saved",
+  watching: "In Progress",
+  watched: "Completed",
+}
+
 // Best-effort title extraction for the undo toast - `item` is untyped here (see note
 // above), so this just probes the shapes MediaCard/media-details-modal already use.
 function extractTitle(item: unknown): string {
@@ -108,9 +114,6 @@ export function SavedMediaProvider({ children }: { children: ReactNode }) {
       const current = statusMap[key] ?? null
       // Predict the result: clicking the active status un-saves; otherwise sets it.
       const predicted: SavedStatus | null = current === status ? null : status
-      // Only a genuine removal (an active status being un-toggled to nothing) should
-      // trigger the undo toast - never a plain status change (e.g. to_watch -> watched).
-      const isRemoval = predicted === null && current !== null
 
       // Optimistic update
       setStatusMap((prev) => {
@@ -138,12 +141,21 @@ export function SavedMediaProvider({ children }: { children: ReactNode }) {
           return next
         })
 
-        if (isRemoval && (data.status === null || data.status === undefined) && current) {
+        // Show an undo toast for any change to a previously-saved item - a full
+        // removal or a plain status change (e.g. to_watch -> watched) - but not
+        // for a brand new save (current === null), where there's nothing to undo
+        // back to besides removing it again.
+        const newStatus = data.status ?? null
+        if (current && newStatus !== current) {
           const title = extractTitle(item)
-          toast(`Removed "${title}" from your library`, {
+          const message = newStatus
+            ? `Moved "${title}" to ${STATUS_LABELS[newStatus as SavedStatus]}`
+            : `Removed "${title}" from your library`
+          toast(message, {
             duration: 5000,
-            // Re-inserts, since the item is currently absent (toggling an absent item
-            // with a given status inserts it - see the predicted-status logic above).
+            // Restores the previous status, whatever it was - re-inserts if the
+            // item is now absent (toggling an absent item with a given status
+            // inserts it - see the predicted-status logic above).
             action: { label: "Undo", onClick: () => toggle(type, id, current, item) },
           })
         }

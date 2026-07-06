@@ -86,6 +86,7 @@ async function fetchMovieOrSeriesCard(tmdbId, mediaType, tmdbApiKey) {
       release_date: data.release_date,
       vote_average: data.vote_average,
       genre_ids,
+      details: { runtime: data.runtime, genres: data.genres || [] },
     }
   }
   return {
@@ -98,6 +99,7 @@ async function fetchMovieOrSeriesCard(tmdbId, mediaType, tmdbApiKey) {
     first_air_date: data.first_air_date,
     vote_average: data.vote_average,
     genre_ids,
+    details: { episode_run_time: data.episode_run_time || [], genres: data.genres || [] },
   }
 }
 

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { SlidersHorizontal, X } from "lucide-react"
 import type { MediaType, SavedStatus } from "./saved-media-provider"
-import { decadeLabel } from "@/lib/library-filters"
+import { decadeLabel, RUNTIME_MIN, RUNTIME_MAX, PAGES_MIN, PAGES_MAX } from "@/lib/library-filters"
 import { PillGroup } from "./pill-group"
 
 export const STATUS_OPTIONS: { key: SavedStatus; label: string; activeClass: string }[] = [
@@ -31,6 +31,12 @@ interface LibraryFiltersProps {
   availableEras: number[]
   selectedEras: Set<number>
   onErasChange: (eras: Set<number>) => void
+  minRating: number
+  onMinRatingChange: (rating: number) => void
+  maxRuntime: number
+  onMaxRuntimeChange: (runtime: number) => void
+  maxPages: number
+  onMaxPagesChange: (pages: number) => void
 }
 
 // Shared between the desktop sidebar and the mobile drawer - grouped so a future
@@ -49,6 +55,12 @@ function FilterGroups({
   availableEras,
   selectedEras,
   onErasChange,
+  minRating,
+  onMinRatingChange,
+  maxRuntime,
+  onMaxRuntimeChange,
+  maxPages,
+  onMaxPagesChange,
 }: LibraryFiltersProps) {
   return (
     <div className="space-y-6">
@@ -91,6 +103,53 @@ function FilterGroups({
 
       <PillGroup label="Genre" options={availableGenres} selected={selectedGenres} onChange={onGenresChange} />
       <PillGroup label="Era" options={availableEras} selected={selectedEras} onChange={onErasChange} renderLabel={decadeLabel} />
+
+      <div>
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+          Minimum rating: {minRating === 0 ? "Any" : `${minRating}+`}
+        </h3>
+        <input
+          type="range"
+          min={0}
+          max={9}
+          step={1}
+          value={minRating}
+          onChange={(e) => onMinRatingChange(Number(e.target.value))}
+          className="w-full"
+        />
+      </div>
+
+      {typeFilter === "book" ? (
+        <div>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+            Max pages: {maxPages >= PAGES_MAX ? "Any" : maxPages}
+          </h3>
+          <input
+            type="range"
+            min={PAGES_MIN}
+            max={PAGES_MAX}
+            step={50}
+            value={maxPages}
+            onChange={(e) => onMaxPagesChange(Number(e.target.value))}
+            className="w-full"
+          />
+        </div>
+      ) : (
+        <div>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+            Max runtime: {maxRuntime >= RUNTIME_MAX ? "Any" : `${maxRuntime}m`}
+          </h3>
+          <input
+            type="range"
+            min={RUNTIME_MIN}
+            max={RUNTIME_MAX}
+            step={10}
+            value={maxRuntime}
+            onChange={(e) => onMaxRuntimeChange(Number(e.target.value))}
+            className="w-full"
+          />
+        </div>
+      )}
     </div>
   )
 }
