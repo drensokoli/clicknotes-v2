@@ -24,15 +24,7 @@ const SEND_DELAY_MS = 400 // stay well under Resend's rate limit
 
 // Test/malformed accounts from dev, plus anyone already sent the announcement
 // via --to - never resent here.
-const EXCLUDED_EMAILS = new Set([
-  'test@test',
-  'test@test.com',
-  'ds51318@ubt-uni.ne',
-  'ds51318@ubt-unit.net',
-  'ds51318@ubt-uni.net',
-  'drensokooli@gmail.com',
-  'drensokoli@gmail.com', // already sent as the --to test send
-])
+const EXCLUDED_EMAILS = new Set([])
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))

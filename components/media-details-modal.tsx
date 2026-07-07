@@ -114,20 +114,28 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
 
         const fetchDetails = async () => {
           try {
+            // A `details` object only counts as "already cached" if it has a
+            // `videos` key - some saved cards only ever got a stub `details`
+            // (e.g. just `{ runtime }` from scripts/backfill-runtime.js, or
+            // `{ genres }` alone) with no trailer/credits data ever fetched, and
+            // treating those as complete permanently hid the Watch/Trailer
+            // buttons and embed for them.
+            const hasFullDetails = 'details' in item && item.details && typeof item.details === 'object' && 'videos' in item.details
+
             // Check if we already have detailed data in the item (from Redis)
-            if ('details' in item && item.details && 'omdbData' in item && item.omdbData) {
+            if (hasFullDetails && 'omdbData' in item && item.omdbData) {
               console.log('✅ Using cached detailed data from Redis');
-              setDetailedData(item.details);
+              setDetailedData(item.details as MovieDetails | TVDetails);
               setOmdbData(item.omdbData);
               setIsLoading(false);
               return;
             }
 
             // Also check if the data might be nested differently
-            if ('details' in item && item.details && typeof item.details === 'object') {
+            if (hasFullDetails) {
               console.log('✅ Found details data, checking structure...');
               // The details might already contain what we need
-              setDetailedData(item.details);
+              setDetailedData(item.details as MovieDetails | TVDetails);
 
               if ('omdbData' in item && item.omdbData) {
                 setOmdbData(item.omdbData);
