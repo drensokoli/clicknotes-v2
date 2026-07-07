@@ -1,6 +1,6 @@
 "use client"
 
-import { X, Star, Calendar, ExternalLink, Play, Eye, Bookmark, User, MonitorPlay, BookOpen } from "lucide-react"
+import { X, Star, Calendar, ExternalLink, Play, Eye, Bookmark, User, MonitorPlay, BookOpen, Share2 } from "lucide-react"
 import { getOmdbData } from "@/lib/omdb-helpers"
 import Image from "next/image"
 import { useModal } from "./modal-provider"
@@ -8,7 +8,9 @@ import { useSavedMedia } from "./saved-media-provider"
 import { useEffect, useState } from "react"
 import { fetchMovieDetails, fetchTVDetails, getGenreNames, getYouTubeTrailer, type MovieDetails, type TVDetails } from "@/lib/tmdb-details"
 import { splitBookCategories } from "@/lib/book-categories"
+import { getMediaHref } from "@/lib/media-url"
 import { motion, AnimatePresence } from "framer-motion"
+import { toast } from "sonner"
 
 interface MediaDetailsModalProps {
   omdbApiKeys: string[]
@@ -286,6 +288,22 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
     if (item.type === "series") return `https://www.themoviedb.org/tv/${item.id}`
     if (item.type === "book" && 'volumeInfo' in item && item.volumeInfo.infoLink) return item.volumeInfo.infoLink
     return null
+  }
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}${getMediaHref(item.type, item.id)}`
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: getTitle(), url })
+      } catch {
+        // User cancelled the share sheet - not an error.
+      }
+      return
+    }
+
+    await navigator.clipboard.writeText(url)
+    toast('Link copied to clipboard')
   }
 
   const getCast = () => {
@@ -606,6 +624,19 @@ export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
                       <span className="hidden sm:inline">View Trailer</span>
                     </motion.button>
                   )}
+                  {/* Share */}
+                  <motion.button
+                    onClick={handleShare}
+                    className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-surface-elevated hover:bg-border text-foreground rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
+                    variants={buttonVariants}
+                    custom={4}
+                    whileHover="hover"
+                    whileTap="tap"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span className="hidden sm:inline">Share</span>
+                  </motion.button>
+
                   {/* More Button */}
                   {getExternalLink() && (
                     <motion.a
