@@ -151,7 +151,6 @@ export default async function Home() {
         movieRanking={movieRanking}
         seriesRanking={seriesRanking}
         bookRanking={bookRanking}
-        tmdbApiKey={tmdbApiKey}
         googleBooksApiKey={googleBooksApiKey}
         redisKeysFetched={redisKeysFetched}
       />

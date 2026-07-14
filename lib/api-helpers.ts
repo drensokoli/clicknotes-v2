@@ -82,12 +82,11 @@ export const fetchPopularMovies = async (tmdbApiKey: string, totalPages: number 
   return popularMoviesResults;
 };
 
-export const searchMoviesByTitle = async (title: string, tmdbApiKey: string) => {
+export const searchMoviesByTitle = async (title: string) => {
   try {
-    const response = await axiosInstance.get(
-      `https://api.themoviedb.org/3/search/movie?api_key=${tmdbApiKey}&language=en-US&query=${encodeURIComponent(title)}&include_adult=false`
-    );
-    return response.data.results;
+    const response = await fetch(`/api/tmdb/search?type=movie&q=${encodeURIComponent(title)}`);
+    const data = await response.json();
+    return data.results ?? [];
   } catch (error) {
     console.error('Error searching movies:', error);
     return [];
@@ -112,12 +111,11 @@ export const fetchPopularSeries = async (tmdbApiKey: string, totalPages: number 
   return popularSeriesResults;
 };
 
-export const searchSeriesByTitle = async (title: string, tmdbApiKey: string) => {
+export const searchSeriesByTitle = async (title: string) => {
   try {
-    const response = await axiosInstance.get(
-      `https://api.themoviedb.org/3/search/tv?api_key=${tmdbApiKey}&language=en-US&query=${encodeURIComponent(title)}`
-    );
-    return response.data.results;
+    const response = await fetch(`/api/tmdb/search?type=tv&q=${encodeURIComponent(title)}`);
+    const data = await response.json();
+    return data.results ?? [];
   } catch (error) {
     console.error('Error searching Series:', error);
     return [];
@@ -185,18 +183,69 @@ export const searchBooksByTitle = async (title: string, googleBooksApiKey: strin
 };
 
 // Content search helper (similar to v1's searchContentByTitle)
-export const searchContentByTitle = async ({ 
-  title, 
-  tmdbApiKey, 
-  type 
-}: { 
-  title: string; 
-  tmdbApiKey: string; 
-  type: 'movie' | 'tv' 
+export const searchContentByTitle = async ({
+  title,
+  type
+}: {
+  title: string;
+  type: 'movie' | 'tv'
 }) => {
   if (type === 'movie') {
-    return searchMoviesByTitle(title, tmdbApiKey);
+    return searchMoviesByTitle(title);
   } else {
-    return searchSeriesByTitle(title, tmdbApiKey);
+    return searchSeriesByTitle(title);
+  }
+};
+
+// People/filmography helpers backing the Home page's actor/director search
+// (components/person-chip-row.tsx) - proxied through app/api/tmdb/* so the
+// TMDB key never reaches the browser for these calls.
+export interface PersonSearchResult {
+  id: number;
+  name: string;
+  profile_path: string | null;
+  known_for_department: string | null;
+  popularity: number;
+}
+
+export const searchPeople = async (query: string): Promise<PersonSearchResult[]> => {
+  try {
+    const response = await fetch(`/api/tmdb/person-search?q=${encodeURIComponent(query)}`);
+    const data = await response.json();
+    return data.people ?? [];
+  } catch (error) {
+    console.error('Error searching people:', error);
+    return [];
+  }
+};
+
+export const fetchPersonCredits = async (personId: number, mediaType: 'movie' | 'tv') => {
+  try {
+    const response = await fetch(`/api/tmdb/person-credits?personId=${personId}&mediaType=${mediaType}`);
+    const data = await response.json();
+    return data.results ?? [];
+  } catch (error) {
+    console.error('Error fetching person credits:', error);
+    return [];
+  }
+};
+
+// Live "Popular by genre" for the Home page's genre pills (movies/series only)
+// - see app/api/tmdb/discover/route.ts for the quality/adult filtering this
+// proxies through.
+export const discoverByGenre = async (
+  type: 'movie' | 'tv',
+  genreIds: number[],
+  page: number = 1
+): Promise<{ results: unknown[]; totalPages: number }> => {
+  try {
+    const response = await fetch(
+      `/api/tmdb/discover?type=${type}&genres=${genreIds.join(',')}&page=${page}`
+    );
+    const data = await response.json();
+    return { results: data.results ?? [], totalPages: data.totalPages ?? 1 };
+  } catch (error) {
+    console.error('Error discovering by genre:', error);
+    return { results: [], totalPages: 1 };
   }
 };

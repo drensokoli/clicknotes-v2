@@ -6,6 +6,7 @@ import { sendEmail } from '../../../lib/email-service'
 import { getOmdbData } from '../../../lib/omdb-helpers'
 import { Book } from '@/components/media-card'
 import { optimizeMovieData, optimizeSeriesData, optimizeBookData } from '../../../lib/data-optimization'
+import { isEroticContent, meetsQualityStandards } from '../../../lib/content-quality'
 
 // How many items to enrich (TMDB trailer + OMDB lookup) concurrently per batch during
 // population. Keeps wall-clock time bounded (240 items / 6 ~= 40 batches) while staying
@@ -76,41 +77,6 @@ async function isFresh(client: ReturnType<typeof createRedisClient>, key: string
 async function markUpdated(client: ReturnType<typeof createRedisClient>, key: string) {
   await client.set(updatedAtKey(key), Date.now().toString())
 }
-
-// Helper function to check if content is erotic or inappropriate
-const isEroticContent = (title: string, description: string) => {
-  const eroticKeywords = [
-    'erotic', 'porn', 'sex', 'nude',
-    'nudity', 'explicit', 'mature', 'softcore',
-    'hardcore', 'xxx', 'erotica', 'sensual',
-    'intimate', 'romance novel', 'adult romance',
-    'mature film', 'adult cinema', 'adult film', 'adult movie',
-    'sultry', 'seduct', 'seduce', 'kinky', 'flirt', 'lude'
-  ];
-
-  // Check if any erotic keywords are in the description or title
-  const hasEroticContent = eroticKeywords.some(keyword =>
-    description.includes(keyword) || title.includes(keyword)
-  );
-
-  // Check if any erotic keywords are in the title
-  const hasEroticTitle = eroticKeywords.some(keyword =>
-    title.includes(keyword)
-  );
-
-  return hasEroticContent || hasEroticTitle;
-};
-
-// Helper function to check if content meets quality standards
-const meetsQualityStandards = (rating: number, voteCount: number) => {
-  // Must have rating >= 6.0
-  if (rating < 6.0) return false;
-
-  // Must have at least 10 votes to ensure rating reliability
-  if (voteCount < 10) return false;
-
-  return true;
-};
 
 // Populate movies with card payloads that also carry a trimmed trailer + OMDB lookup
 // (runtime, genres, one YouTube trailer, imdbId/rated/awards, Stremio link) so the

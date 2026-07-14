@@ -3,7 +3,29 @@
 import * as React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { MediaCard, MediaItem, Movie, Series, Book } from "./media-card"
-import { searchContentByTitle, searchBooksByTitle } from "@/lib/api-helpers"
+import {
+  searchContentByTitle,
+  searchBooksByTitle,
+  searchPeople,
+  fetchPersonCredits,
+  discoverByGenre,
+  type PersonSearchResult,
+} from "@/lib/api-helpers"
+import {
+  matchesSearchGenres,
+  matchesSearchEras,
+  matchesSearchRating,
+  sortSearchItems,
+  computeAvailableSearchGenres,
+  computeAvailableSearchEras,
+  DEFAULT_SEARCH_SORT_FIELD,
+  DEFAULT_SEARCH_SORT_DIR,
+  type SearchSortField,
+  type SearchSortDir,
+} from "@/lib/search-filters"
+import { SearchFilterBar } from "./search-filter-bar"
+import { PopularGenrePills } from "./popular-genre-pills"
+import { PersonChipRow } from "./person-chip-row"
 import { useSlashFocus } from "@/hooks/use-slash-focus"
 import { ScrollToTopButton } from "./scroll-to-top-button"
 
@@ -75,6 +97,18 @@ const MediaGrid = React.memo(function MediaGrid({
   )
 })
 
+// TMDB discover/credits responses are raw movie- or tv-shaped objects with no
+// `type` discriminator (unlike the app's own Movie/Series). Casting through a
+// union (Movie | Series) and branching on it directly confuses the type
+// checker - branching on the raw items first, per media type, keeps each
+// branch's cast unambiguous.
+function mapToMediaItems(items: unknown[], mediaType: "movie" | "tv"): MediaItem[] {
+  if (mediaType === "movie") {
+    return (items as Omit<Movie, "type">[]).map((item) => ({ ...item, type: "movie" as const }))
+  }
+  return (items as Omit<Series, "type">[]).map((item) => ({ ...item, type: "series" as const }))
+}
+
 interface ContentSectionProps {
   initialMovies: Movie[]
   initialSeries: Series[]
@@ -82,7 +116,6 @@ interface ContentSectionProps {
   movieRanking?: Array<{value: string, score: number}>
   seriesRanking?: Array<{value: string, score: number}>
   bookRanking?: Array<{value: string, score: number}>
-  tmdbApiKey: string
   googleBooksApiKey: string
   // Progressive loading props
   redisKeysFetched?: {
@@ -107,7 +140,6 @@ export function ContentSection({
   movieRanking = [],
   seriesRanking = [],
   bookRanking = [],
-  tmdbApiKey,
   googleBooksApiKey,
   redisKeysFetched = { movies: 1, series: 1, books: 1 },
   externalActiveSection,
@@ -176,6 +208,140 @@ export function ContentSection({
     series: 40,
     books: 40
   })
+
+  // Search result filter/sort (genre/era/min rating + sort field/direction) -
+  // applied client-side on top of whatever the title search (or a selected
+  // person's filmography) already returned. See lib/search-filters.ts.
+  const [selectedSearchGenres, setSelectedSearchGenres] = useState<Set<string>>(new Set())
+  const [selectedSearchEras, setSelectedSearchEras] = useState<Set<number>>(new Set())
+  const [minSearchRating, setMinSearchRating] = useState(0)
+  const [searchSortField, setSearchSortField] = useState<SearchSortField>(DEFAULT_SEARCH_SORT_FIELD)
+  const [searchSortDir, setSearchSortDir] = useState<SearchSortDir>(DEFAULT_SEARCH_SORT_DIR)
+
+  // Popular genre pills (movies/series only) - selecting a genre switches the
+  // grid from the Redis-cached Popular list to a live, paginated TMDB
+  // discover call (see app/api/tmdb/discover/route.ts) instead of filtering
+  // whatever happens to already be cached.
+  const [popularGenreIds, setPopularGenreIds] = useState<Set<number>>(new Set())
+  const [discoverResults, setDiscoverResults] = useState<MediaItem[]>([])
+  const [discoverPage, setDiscoverPage] = useState(1)
+  const [discoverTotalPages, setDiscoverTotalPages] = useState(1)
+  const [isDiscoverLoading, setIsDiscoverLoading] = useState(false)
+
+  // Actor/director search (movies/series only) - a parallel, separately
+  // debounced person-name search alongside the title search above. Selecting
+  // a person switches the grid to their filmography (personCredits) until
+  // cleared - see the effects further down.
+  const [personResults, setPersonResults] = useState<PersonSearchResult[]>([])
+  const [activePerson, setActivePerson] = useState<PersonSearchResult | null>(null)
+  const [personCredits, setPersonCredits] = useState<MediaItem[]>([])
+  const [isLoadingCredits, setIsLoadingCredits] = useState(false)
+  const personDebounceTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const personRequestId = useRef(0)
+
+  // Reset every bit of new filter/browse/person state on a section switch,
+  // mirroring the existing hash-change handler's reset of searchQuery/searchResults.
+  useEffect(() => {
+    setSelectedSearchGenres(new Set())
+    setSelectedSearchEras(new Set())
+    setMinSearchRating(0)
+    setSearchSortField(DEFAULT_SEARCH_SORT_FIELD)
+    setSearchSortDir(DEFAULT_SEARCH_SORT_DIR)
+    setPopularGenreIds(new Set())
+    setDiscoverResults([])
+    setDiscoverPage(1)
+    setDiscoverTotalPages(1)
+    setPersonResults([])
+    setActivePerson(null)
+    setPersonCredits([])
+  }, [activeSection])
+
+  // Clearing the search box exits "viewing a person's filmography" mode, same
+  // as clicking the chip's own × (components/person-chip-row.tsx).
+  useEffect(() => {
+    if (!searchQuery.trim() && activePerson) {
+      setActivePerson(null)
+      setPersonCredits([])
+    }
+  }, [searchQuery, activePerson])
+
+  // Actor/director search - parallel to the title search below, movies/series
+  // only. Suppressed while a person is already selected (see the effect above
+  // for how that gets exited) so typing doesn't fight with the pinned view.
+  useEffect(() => {
+    if (activeSection === "books" || !searchQuery.trim() || activePerson) {
+      setPersonResults([])
+      return
+    }
+
+    clearTimeout(personDebounceTimeout.current!)
+    personRequestId.current += 1
+    const requestId = personRequestId.current
+
+    personDebounceTimeout.current = setTimeout(async () => {
+      const people = await searchPeople(searchQuery)
+      if (requestId !== personRequestId.current) return
+      setPersonResults(people)
+    }, 300)
+
+    return () => clearTimeout(personDebounceTimeout.current!)
+  }, [searchQuery, activeSection, activePerson])
+
+  const handleSelectPerson = useCallback(async (person: PersonSearchResult) => {
+    setActivePerson(person)
+    setPersonResults([])
+    setIsLoadingCredits(true)
+
+    const mediaType = activeSection === "movies" ? "movie" : "tv"
+    const credits = await fetchPersonCredits(person.id, mediaType)
+    setPersonCredits(mapToMediaItems(credits, mediaType))
+    setIsLoadingCredits(false)
+  }, [activeSection])
+
+  const handleClearPerson = useCallback(() => {
+    setActivePerson(null)
+    setPersonCredits([])
+  }, [])
+
+  // Live "Popular by genre" - fetches page 1 fresh whenever the selected
+  // genres or active section change, replacing the Redis-cached Popular data
+  // entirely while any genre is selected.
+  useEffect(() => {
+    if (searchQuery.trim() || popularGenreIds.size === 0 || activeSection === "books") {
+      return
+    }
+
+    let cancelled = false
+    setIsDiscoverLoading(true)
+    const mediaType = activeSection === "movies" ? "movie" : "tv"
+
+    discoverByGenre(mediaType, Array.from(popularGenreIds), 1).then(({ results, totalPages }) => {
+      if (cancelled) return
+      setDiscoverResults(mapToMediaItems(results, mediaType))
+      setDiscoverPage(1)
+      setDiscoverTotalPages(totalPages)
+      setIsDiscoverLoading(false)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [popularGenreIds, activeSection, searchQuery])
+
+  const loadMoreDiscover = useCallback(async () => {
+    if (isDiscoverLoading || discoverPage >= discoverTotalPages) return
+
+    setIsDiscoverLoading(true)
+    const mediaType = activeSection === "movies" ? "movie" : "tv"
+    const nextPage = discoverPage + 1
+    const { results, totalPages } = await discoverByGenre(mediaType, Array.from(popularGenreIds), nextPage)
+    setDiscoverResults((prev) => [...prev, ...mapToMediaItems(results, mediaType)])
+    setDiscoverPage(nextPage)
+    setDiscoverTotalPages(totalPages)
+    setIsDiscoverLoading(false)
+  }, [isDiscoverLoading, discoverPage, discoverTotalPages, activeSection, popularGenreIds])
+
+  const isBrowsingByGenre = !searchQuery.trim() && popularGenreIds.size > 0 && activeSection !== "books"
 
   // We start with 40 items server-fetched and displayed initially; subsequent
   // scroll-triggered batches load 20 more at a time.
@@ -383,6 +549,16 @@ export function ContentSection({
     }, 0);
   }, [isLoading, isLoadingNextPage, searchQuery, activeSection, allMediaData, displayCounts, currentRankingPosition, fetchNextBatch, prefetchNextBatch, isPrefetching]);
 
+  // While browsing Popular by genre, infinite scroll pages through the live
+  // discover results instead of the Redis-cached Popular list.
+  const handleLoadMore = useCallback(() => {
+    if (isBrowsingByGenre) {
+      loadMoreDiscover();
+    } else {
+      loadMore();
+    }
+  }, [isBrowsingByGenre, loadMoreDiscover, loadMore]);
+
   // Set up intersection observer for infinite scroll
   useEffect(() => {
     // Only set up observer when not searching and component is initialized
@@ -392,12 +568,12 @@ export function ContentSection({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        
-        if (entries[0].isIntersecting && !isLoading && !isLoadingNextPage) {
-          loadMore();
+
+        if (entries[0].isIntersecting && !isLoading && !isLoadingNextPage && !isDiscoverLoading) {
+          handleLoadMore();
         }
       },
-      { 
+      {
         threshold: 0.1,
         rootMargin: '100px' // Start loading 100px before reaching the trigger
       }
@@ -414,7 +590,7 @@ export function ContentSection({
       clearTimeout(timer);
       observer.disconnect();
     };
-  }, [activeSection, isLoading, isLoadingNextPage, searchQuery, isInitialized, displayCounts, allMediaData, loadMore]);
+  }, [activeSection, isLoading, isLoadingNextPage, isDiscoverLoading, searchQuery, isInitialized, displayCounts, allMediaData, handleLoadMore]);
 
   useEffect(() => {
     // Only handle hash changes if we're not using external state management
@@ -461,7 +637,10 @@ export function ContentSection({
   }, [activeSection])
 
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    // While viewing a selected person's filmography, the search box stays
+    // populated but shouldn't re-trigger a title search - see the
+    // person-search/activePerson effects below for how that view is entered/exited.
+    if (!searchQuery.trim() || activePerson) {
       setSearchResults([])
       setIsSearching(false)
       return
@@ -483,14 +662,12 @@ export function ContentSection({
         if (activeSection === "movies") {
           const movieResults = await searchContentByTitle({
             title: searchQuery,
-            tmdbApiKey,
             type: "movie"
           })
           results = movieResults.map((movie: Movie) => ({ ...movie, type: "movie" as const }))
         } else if (activeSection === "series") {
           const tvResults = await searchContentByTitle({
             title: searchQuery,
-            tmdbApiKey,
             type: "tv"
           })
           results = tvResults.map((tv: Series) => ({ ...tv, type: "series" as const }))
@@ -510,31 +687,46 @@ export function ContentSection({
     }, 300)
 
     return () => clearTimeout(debounceTimeout.current!)
-  }, [searchQuery, activeSection, tmdbApiKey, googleBooksApiKey, setSearchResults])
+  }, [searchQuery, activeSection, googleBooksApiKey, activePerson, setSearchResults])
 
   const getCurrentData = (): MediaItem[] => {
-    if (searchQuery.trim() && searchResults.length > 0) {
-      return searchResults
+    if (searchQuery.trim()) {
+      return activePerson ? personCredits : searchResults
     }
 
-    const staticData = searchQuery.trim() ? [] : (() => {
-      const currentDisplayCount = displayCounts[activeSection];
-      switch (activeSection) {
-        case "movies":
-          return allMediaData.movies.slice(0, currentDisplayCount).map(movie => ({ ...movie, type: "movie" as const }))
-        case "series":
-          return allMediaData.series.slice(0, currentDisplayCount).map(tv => ({ ...tv, type: "series" as const }))
-        case "books":
-          return allMediaData.books.slice(0, currentDisplayCount).map(book => ({ ...book, type: "book" as const }))
-        default:
-          return allMediaData.movies.slice(0, currentDisplayCount).map(movie => ({ ...movie, type: "movie" as const }))
-      }
-    })()
+    if (isBrowsingByGenre) {
+      return discoverResults
+    }
 
-    return staticData
+    const currentDisplayCount = displayCounts[activeSection];
+    switch (activeSection) {
+      case "movies":
+        return allMediaData.movies.slice(0, currentDisplayCount).map(movie => ({ ...movie, type: "movie" as const }))
+      case "series":
+        return allMediaData.series.slice(0, currentDisplayCount).map(tv => ({ ...tv, type: "series" as const }))
+      case "books":
+        return allMediaData.books.slice(0, currentDisplayCount).map(book => ({ ...book, type: "book" as const }))
+      default:
+        return allMediaData.movies.slice(0, currentDisplayCount).map(movie => ({ ...movie, type: "movie" as const }))
+    }
   }
 
-  const filteredData = getCurrentData()
+  const searchBaseData = activePerson ? personCredits : searchResults
+  const availableSearchGenres = computeAvailableSearchGenres(searchBaseData)
+  const availableSearchEras = computeAvailableSearchEras(searchBaseData)
+
+  const rawData = getCurrentData()
+  const filteredData = searchQuery.trim()
+    ? sortSearchItems(
+        rawData.filter((item) =>
+          matchesSearchGenres(item, selectedSearchGenres) &&
+          matchesSearchEras(item, selectedSearchEras) &&
+          matchesSearchRating(item, minSearchRating)
+        ),
+        searchSortField,
+        searchSortDir,
+      )
+    : rawData
 
   const getSectionTitle = () => {
     switch (activeSection) {
@@ -678,6 +870,47 @@ export function ContentSection({
         </div>
       </div>
 
+      {/* Search filters/sort, actor/director search (movies/series), and
+          Popular genre browsing - mutually exclusive with each other based on
+          whether there's an active search query. */}
+      <div className="mb-8 sm:mb-12">
+        {searchQuery.trim() ? (
+          <>
+            {activeSection !== "books" && (
+              <PersonChipRow
+                people={personResults}
+                activePerson={activePerson}
+                onSelectPerson={handleSelectPerson}
+                onClearPerson={handleClearPerson}
+              />
+            )}
+            <SearchFilterBar
+              isBook={activeSection === "books"}
+              availableGenres={availableSearchGenres}
+              selectedGenres={selectedSearchGenres}
+              onGenresChange={setSelectedSearchGenres}
+              availableEras={availableSearchEras}
+              selectedEras={selectedSearchEras}
+              onErasChange={setSelectedSearchEras}
+              minRating={minSearchRating}
+              onMinRatingChange={setMinSearchRating}
+              sortField={searchSortField}
+              onSortFieldChange={setSearchSortField}
+              sortDir={searchSortDir}
+              onSortDirChange={setSearchSortDir}
+            />
+          </>
+        ) : (
+          activeSection !== "books" && (
+            <PopularGenrePills
+              mediaType={activeSection === "movies" ? "movie" : "tv"}
+              selectedGenreIds={popularGenreIds}
+              onGenreIdsChange={setPopularGenreIds}
+            />
+          )
+        )}
+      </div>
+
       {/* Previous Implementation (Commented Out) */}
       {/*
         <div className="mb-8 sm:mb-12">
@@ -761,7 +994,7 @@ export function ContentSection({
       <MediaGrid items={filteredData} activeSection={activeSection} displayCounts={displayCounts} />
 
       {/* Search Loading Skeleton */}
-      {isSearching && (
+      {(isSearching || isLoadingCredits) && (
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-6 md:gap-8">
           {Array.from({ length: 12 }).map((_, index) => (
             <div key={`search-skeleton-${index}`}>
@@ -773,7 +1006,7 @@ export function ContentSection({
       )}
 
       {/* Next Page Loading Indicator */}
-      {isLoadingNextPage && (
+      {(isLoadingNextPage || isDiscoverLoading) && (
         <div className="flex items-center justify-center pt-8">
           <div className="loader"></div>
         </div>
@@ -782,6 +1015,12 @@ export function ContentSection({
 
       {/* Infinite Scroll Trigger */}
       {!searchQuery && (() => {
+        if (isBrowsingByGenre) {
+          return discoverPage < discoverTotalPages && (
+            <div ref={loadMoreRef} className="h-10 w-full mt-8" aria-hidden="true" />
+          )
+        }
+
         const totalItems = allMediaData[activeSection].length;
         const currentDisplayCount = displayCounts[activeSection];
         const hasReachedEndOfRanking = currentRankingPosition[activeSection] >= 999;
@@ -800,7 +1039,7 @@ export function ContentSection({
       })()}
 
       {/* Empty State */}
-      {filteredData.length === 0 && searchQuery && !isSearching && (
+      {filteredData.length === 0 && !isSearching && !isLoadingCredits && !isDiscoverLoading && (searchQuery.trim() || isBrowsingByGenre) && (
         <div className="flex flex-col items-center justify-center py-16 sm:py-20">
           <div className="text-center max-w-md px-4">
             <div className="mb-6 relative">
@@ -813,14 +1052,17 @@ export function ContentSection({
             </div>
             <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-3">No results found</h3>
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed mb-6">
-              We couldn&apos;t find any {getSectionTitle().toLowerCase()} matching &quot;{searchQuery}&quot;. 
-              Try different keywords or browse our collection.
+              {searchQuery.trim() ? (
+                <>We couldn&apos;t find any {getSectionTitle().toLowerCase()} matching &quot;{searchQuery}&quot;. Try different keywords, or loosen the filters above.</>
+              ) : (
+                <>No {getSectionTitle().toLowerCase()} matched that genre. Try a different genre or clear the filter.</>
+              )}
             </p>
             <button
-              onClick={() => setSearchQuery("")}
+              onClick={() => (searchQuery.trim() ? setSearchQuery("") : setPopularGenreIds(new Set()))}
               className="px-4 sm:px-6 py-2.5 sm:py-3 bg-primary text-white rounded-lg sm:rounded-xl hover:bg-primary-hover transition-colors duration-300 font-medium text-sm sm:text-base"
             >
-              Clear Search
+              {searchQuery.trim() ? "Clear Search" : "Clear Genre Filter"}
             </button>
           </div>
         </div>

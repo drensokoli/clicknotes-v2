@@ -14,7 +14,6 @@ interface MainContentProps {
   movieRanking?: Array<{value: string, score: number}>
   seriesRanking?: Array<{value: string, score: number}>
   bookRanking?: Array<{value: string, score: number}>
-  tmdbApiKey: string
   googleBooksApiKey: string
   redisKeysFetched: {
     movies: number
@@ -30,7 +29,6 @@ export function MainContent({
   movieRanking = [],
   seriesRanking = [],
   bookRanking = [],
-  tmdbApiKey,
   googleBooksApiKey,
   redisKeysFetched,
 }: MainContentProps) {
@@ -85,7 +83,6 @@ export function MainContent({
           movieRanking={movieRanking}
           seriesRanking={seriesRanking}
           bookRanking={bookRanking}
-          tmdbApiKey={tmdbApiKey}
           googleBooksApiKey={googleBooksApiKey}
           redisKeysFetched={redisKeysFetched}
           externalActiveSection={activeSection}
