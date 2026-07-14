@@ -272,7 +272,7 @@ export function SavedList({ items }: SavedListProps) {
                   <DropdownMenuLabel>Sort by</DropdownMenuLabel>
                   <DropdownMenuRadioGroup value={sortField} onValueChange={(v) => setSortField(v as SortField)}>
                     {SORT_FIELD_OPTIONS.map((option) => (
-                      <DropdownMenuRadioItem key={option.key} value={option.key}>
+                      <DropdownMenuRadioItem key={option.key} value={option.key} onSelect={(e) => e.preventDefault()}>
                         {typeFilter === "book" && option.bookLabel ? option.bookLabel : option.label}
                       </DropdownMenuRadioItem>
                     ))}
@@ -280,11 +280,11 @@ export function SavedList({ items }: SavedListProps) {
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel>Direction</DropdownMenuLabel>
                   <DropdownMenuRadioGroup value={sortDir} onValueChange={(v) => setSortDir(v as SortDir)}>
-                    <DropdownMenuRadioItem value="desc">
+                    <DropdownMenuRadioItem value="desc" onSelect={(e) => e.preventDefault()}>
                       <ArrowDown className="w-4 h-4" />
                       Descending
                     </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="asc">
+                    <DropdownMenuRadioItem value="asc" onSelect={(e) => e.preventDefault()}>
                       <ArrowUp className="w-4 h-4" />
                       Ascending
                     </DropdownMenuRadioItem>
