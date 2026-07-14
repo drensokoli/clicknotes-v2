@@ -12,6 +12,7 @@ export interface SavedItem {
   mediaId: string
   status: SavedStatus
   card: SavedCard
+  savedAt: string
 }
 
 // --- helpers to read display fields uniformly across the 3 media types ---
@@ -42,6 +43,25 @@ export function getYear(item: SavedItem): number | null {
   if (!dateStr) return null
   const year = parseInt(dateStr.slice(0, 4), 10)
   return Number.isFinite(year) ? year : null
+}
+
+// Full published/release date as a timestamp (unlike getYear, which only reads the
+// leading 4 digits) so items published in the same year still sort correctly.
+export function getPublishedTime(item: SavedItem): number | null {
+  const dateStr =
+    item.mediaType === "book"
+      ? item.card.volumeInfo?.publishedDate
+      : item.mediaType === "movie"
+        ? item.card.release_date
+        : item.card.first_air_date
+  if (!dateStr) return null
+  const time = new Date(dateStr).getTime()
+  return Number.isFinite(time) ? time : null
+}
+
+export function getSavedTime(item: SavedItem): number | null {
+  const time = new Date(item.savedAt).getTime()
+  return Number.isFinite(time) ? time : null
 }
 
 // Normalized to a 0-10 scale (Google Books averages are out of 5, TMDB out of 10).
@@ -84,6 +104,12 @@ export function getRuntime(item: SavedItem): number | null {
 export function getPageCount(item: SavedItem): number | null {
   if (item.mediaType !== "book") return null
   return typeof item.card.volumeInfo?.pageCount === "number" ? item.card.volumeInfo.pageCount : null
+}
+
+// Runtime (movies/series, in minutes) or page count (books) - whichever "length"
+// axis applies to the item's type. Used by the "Runtime"/"Pages" sort option.
+export function getLength(item: SavedItem): number | null {
+  return item.mediaType === "book" ? getPageCount(item) : getRuntime(item)
 }
 
 export function getDecade(year: number): number {
@@ -162,4 +188,46 @@ export function pillClass(active: boolean, activeClass = "bg-primary text-white"
   return `px-3 py-1.5 rounded-full text-xs font-medium transition-colors hover:cursor-pointer ${
     active ? activeClass : "bg-surface-elevated text-muted-foreground hover:text-foreground"
   }`
+}
+
+// --- sorting ---
+
+export type SortField = "saved" | "published" | "rating" | "length"
+export type SortDir = "asc" | "desc"
+
+export const DEFAULT_SORT_FIELD: SortField = "saved"
+export const DEFAULT_SORT_DIR: SortDir = "desc"
+
+export const SORT_FIELD_OPTIONS: { key: SortField; label: string; bookLabel?: string }[] = [
+  { key: "saved", label: "Date Saved" },
+  { key: "published", label: "Release Date", bookLabel: "Published Date" },
+  { key: "rating", label: "Rating" },
+  { key: "length", label: "Runtime", bookLabel: "Pages" },
+]
+
+function getSortValue(item: SavedItem, field: SortField): number | null {
+  switch (field) {
+    case "saved":
+      return getSavedTime(item)
+    case "published":
+      return getPublishedTime(item)
+    case "rating":
+      return getRating(item)
+    case "length":
+      return getLength(item)
+  }
+}
+
+// Items missing the sorted-on value always sink to the bottom, regardless of
+// direction, rather than flip-flopping to the top on "asc".
+export function sortItems(items: SavedItem[], field: SortField, dir: SortDir): SavedItem[] {
+  const sign = dir === "asc" ? 1 : -1
+  return [...items].sort((a, b) => {
+    const av = getSortValue(a, field)
+    const bv = getSortValue(b, field)
+    if (av === null && bv === null) return 0
+    if (av === null) return 1
+    if (bv === null) return -1
+    return (av - bv) * sign
+  })
 }

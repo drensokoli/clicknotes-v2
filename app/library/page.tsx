@@ -26,6 +26,7 @@ export default async function LibraryPage() {
     mediaId: d.mediaId,
     status: d.status,
     card: d.card,
+    savedAt: d.createdAt.toISOString(),
   }))
 
   const tmdbApiKey = process.env.TMDB_API_KEY || ""

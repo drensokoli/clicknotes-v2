@@ -4,7 +4,7 @@ import { useRef, useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
-import { Shuffle as ShuffleIcon } from "lucide-react"
+import { ArrowDownUp, ArrowUp, ArrowDown, Shuffle as ShuffleIcon } from "lucide-react"
 import { useModal } from "./modal-provider"
 import { useSavedMedia, type MediaType, type SavedStatus } from "./saved-media-provider"
 import { MediaCard, type MediaItem } from "./media-card"
@@ -16,6 +16,8 @@ import { useSlashFocus } from "@/hooks/use-slash-focus"
 import { ScrollToTopButton } from "./scroll-to-top-button"
 import {
   type SavedItem,
+  type SortField,
+  type SortDir,
   getTitle,
   computeAvailableGenres,
   computeAvailableEras,
@@ -23,6 +25,10 @@ import {
   matchesEras,
   matchesRating,
   matchesRuntime,
+  sortItems,
+  SORT_FIELD_OPTIONS,
+  DEFAULT_SORT_FIELD,
+  DEFAULT_SORT_DIR,
   RUNTIME_MAX,
   PAGES_MAX,
 } from "@/lib/library-filters"
@@ -92,6 +98,14 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
     const p = Number(searchParams.get("maxPages"))
     return Number.isFinite(p) && p > 0 ? p : PAGES_MAX
   })
+  const [sortField, setSortField] = useState<SortField>(() => {
+    const s = searchParams.get("sort")
+    return (SORT_FIELD_OPTIONS.some((o) => o.key === s) ? (s as SortField) : DEFAULT_SORT_FIELD)
+  })
+  const [sortDir, setSortDir] = useState<SortDir>(() => {
+    const d = searchParams.get("dir")
+    return d === "asc" || d === "desc" ? d : DEFAULT_SORT_DIR
+  })
   const [searchQuery, setSearchQuery] = useState("")
   const [shuffleOpen, setShuffleOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -116,10 +130,12 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
     if (minRating > 0) params.set("minRating", String(minRating))
     if (maxRuntime < RUNTIME_MAX) params.set("maxRuntime", String(maxRuntime))
     if (maxPages < PAGES_MAX) params.set("maxPages", String(maxPages))
+    if (sortField !== DEFAULT_SORT_FIELD) params.set("sort", sortField)
+    if (sortDir !== DEFAULT_SORT_DIR) params.set("dir", sortDir)
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typeFilter, activeTab, selectedGenres, selectedEras, minRating, maxRuntime, maxPages, pathname])
+  }, [typeFilter, activeTab, selectedGenres, selectedEras, minRating, maxRuntime, maxPages, sortField, sortDir, pathname])
 
   const handleTypeChange = (type: MediaType) => {
     setTypeFilter(type)
@@ -159,9 +175,10 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
 
   const statusMatchedItems = filteredItems.filter((item) => effectiveStatus(item) === activeTab)
   const query = searchQuery.trim().toLowerCase()
-  const visibleItems = query
+  const searchedItems = query
     ? statusMatchedItems.filter((item) => getTitle(item).toLowerCase().includes(query))
     : statusMatchedItems
+  const visibleItems = sortItems(searchedItems, sortField, sortDir)
   const totalCount = filteredItems.filter((item) => effectiveStatus(item) !== null).length
 
   return (
@@ -200,41 +217,67 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
             </button>
           </div>
 
-          {/* Search */}
-          <div className="relative mb-5 max-w-md md:shrink-0">
-            <svg
-              className="w-4 h-4 text-muted-foreground absolute top-1/2 -translate-y-1/2 left-3.5"
-              fill="currentColor"
-              viewBox="0 0 18 18"
-            >
-              <path
-                fillRule="evenodd"
-                d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search your library..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-10 w-full pl-10 pr-9 rounded-lg text-sm focus:outline-none border border-border/40 bg-surface-elevated focus:ring-2 focus:ring-primary/50"
-            />
-            {searchQuery ? (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground hover:cursor-pointer transition-colors"
+          {/* Search + sort */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5 md:shrink-0">
+            <div className="relative max-w-md flex-1">
+              <svg
+                className="w-4 h-4 text-muted-foreground absolute top-1/2 -translate-y-1/2 left-3.5"
+                fill="currentColor"
+                viewBox="0 0 18 18"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <path
+                  fillRule="evenodd"
+                  d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search your library..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-10 w-full pl-10 pr-9 rounded-lg text-sm focus:outline-none border border-border/40 bg-surface-elevated focus:ring-2 focus:ring-primary/50"
+              />
+              {searchQuery ? (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground hover:cursor-pointer transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              ) : (
+                <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center justify-center px-1.5 py-0.5 rounded border border-border/50 bg-surface text-[12px] font-semibold text-muted-foreground pointer-events-none">
+                  /
+                </kbd>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <ArrowDownUp className="w-4 h-4 text-muted-foreground hidden sm:block" />
+              <select
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value as SortField)}
+                aria-label="Sort by"
+                className="h-10 rounded-lg text-sm pl-3 pr-8 focus:outline-none border border-border/40 bg-surface-elevated focus:ring-2 focus:ring-primary/50 hover:cursor-pointer"
+              >
+                {SORT_FIELD_OPTIONS.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {typeFilter === "book" && option.bookLabel ? option.bookLabel : option.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                title={sortDir === "asc" ? "Ascending" : "Descending"}
+                aria-label={sortDir === "asc" ? "Sort ascending" : "Sort descending"}
+                className="h-10 w-10 flex items-center justify-center rounded-lg border border-border/40 bg-surface-elevated text-muted-foreground hover:text-foreground transition-colors hover:cursor-pointer"
+              >
+                {sortDir === "asc" ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
               </button>
-            ) : (
-              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center justify-center px-1.5 py-0.5 rounded border border-border/50 bg-surface text-[12px] font-semibold text-muted-foreground pointer-events-none">
-                /
-              </kbd>
-            )}
+            </div>
           </div>
 
           <div className="flex flex-col md:flex-row gap-4 md:gap-8 md:flex-1 md:min-h-0">
