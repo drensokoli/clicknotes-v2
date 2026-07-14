@@ -1,11 +1,12 @@
 import { fetchMovieDetails, fetchTVDetails } from "./tmdb-details"
 import type { Movie, Series, Book } from "@/components/media-card"
 
-// Fetches a single movie/series/book live from TMDB/Google Books for the
-// /movie/[id], /series/[id], /book/[id] share-link pages (app/movie/[id]/page.tsx
-// etc.) - full `details` (genres/credits/videos) come along for free since the
-// TMDB detail endpoint already returns them, so the details modal doesn't need
-// a second fetch once these land in it.
+// Fetches a single movie/series/book live from TMDB/Google Books - used by both
+// the direct-visit /movie/[id] etc. pages (app/movie/[id]/page.tsx) and their
+// app/@modal/(.)movie/[id]/page.tsx intercepting-route counterparts. Full
+// `details` (genres/credits/videos) come along for free since the TMDB detail
+// endpoint already returns them, so the details modal doesn't need a second
+// fetch once these land in it.
 
 export async function fetchMovieItem(id: number, tmdbApiKey: string): Promise<Movie | null> {
   const details = await fetchMovieDetails(id, tmdbApiKey)

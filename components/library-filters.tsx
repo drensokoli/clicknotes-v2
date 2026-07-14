@@ -1,10 +1,19 @@
 "use client"
 
 import { useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { SlidersHorizontal, X } from "lucide-react"
+import { motion, AnimatePresence, useDragControls } from "framer-motion"
+import { SlidersHorizontal, X, ArrowDownUp, ArrowUp, ArrowDown } from "lucide-react"
 import type { MediaType, SavedStatus } from "./saved-media-provider"
-import { decadeLabel, RUNTIME_MIN, RUNTIME_MAX, PAGES_MIN, PAGES_MAX } from "@/lib/library-filters"
+import {
+  decadeLabel,
+  RUNTIME_MIN,
+  RUNTIME_MAX,
+  PAGES_MIN,
+  PAGES_MAX,
+  SORT_FIELD_OPTIONS,
+  type SortField,
+  type SortDir,
+} from "@/lib/library-filters"
 import { PillGroup } from "./pill-group"
 
 export const STATUS_OPTIONS: { key: SavedStatus; label: string; activeClass: string }[] = [
@@ -37,6 +46,50 @@ interface LibraryFiltersProps {
   onMaxRuntimeChange: (runtime: number) => void
   maxPages: number
   onMaxPagesChange: (pages: number) => void
+  sortField: SortField
+  onSortFieldChange: (field: SortField) => void
+  sortDir: SortDir
+  onSortDirChange: (dir: SortDir) => void
+}
+
+// Shared between the desktop sidebar (full-width, labelled) and the mobile inline
+// row next to the Filters trigger (compact, unlabelled) - see LibraryFilters below.
+function SortControl({
+  typeFilter,
+  sortField,
+  onSortFieldChange,
+  sortDir,
+  onSortDirChange,
+  compact,
+}: Pick<LibraryFiltersProps, "typeFilter" | "sortField" | "onSortFieldChange" | "sortDir" | "onSortDirChange"> & {
+  compact?: boolean
+}) {
+  const sizeClass = compact ? "h-9" : "h-10"
+  return (
+    <div className="flex items-center gap-2">
+      {!compact && <ArrowDownUp className="w-4 h-4 text-muted-foreground shrink-0" />}
+      <select
+        value={sortField}
+        onChange={(e) => onSortFieldChange(e.target.value as SortField)}
+        aria-label="Sort by"
+        className={`${sizeClass} ${compact ? "w-auto" : "flex-1"} rounded-lg text-sm pl-3 pr-8 focus:outline-none border border-border/40 bg-surface-elevated focus:ring-2 focus:ring-primary/50 hover:cursor-pointer`}
+      >
+        {SORT_FIELD_OPTIONS.map((option) => (
+          <option key={option.key} value={option.key}>
+            {typeFilter === "book" && option.bookLabel ? option.bookLabel : option.label}
+          </option>
+        ))}
+      </select>
+      <button
+        onClick={() => onSortDirChange(sortDir === "asc" ? "desc" : "asc")}
+        title={sortDir === "asc" ? "Ascending" : "Descending"}
+        aria-label={sortDir === "asc" ? "Sort ascending" : "Sort descending"}
+        className={`${sizeClass} w-9 shrink-0 flex items-center justify-center rounded-lg border border-border/40 bg-surface-elevated text-muted-foreground hover:text-foreground transition-colors hover:cursor-pointer`}
+      >
+        {sortDir === "asc" ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
+      </button>
+    </div>
+  )
 }
 
 // Shared between the desktop sidebar and the mobile drawer - grouped so a future
@@ -156,26 +209,39 @@ function FilterGroups({
 
 export function LibraryFilters(props: LibraryFiltersProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const dragControls = useDragControls()
 
   return (
     <>
       {/* Desktop sidebar - its parent row is height-capped (see saved-list.tsx),
           so this scrolls independently of the grid instead of the whole page
-          scrolling both together. */}
+          scrolling both together. Sort sits above the filter groups since it's
+          the first thing you reach for once you've narrowed the type/status. */}
       <aside className="hidden md:block w-56 shrink-0 md:h-full md:overflow-y-auto pr-3">
+        <div className="mb-6">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Sort by</h3>
+          <SortControl {...props} />
+        </div>
         <FilterGroups {...props} />
       </aside>
 
-      {/* Mobile trigger */}
-      <button
-        onClick={() => setDrawerOpen(true)}
-        className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-elevated text-foreground text-sm font-medium hover:bg-border transition-colors hover:cursor-pointer"
-      >
-        <SlidersHorizontal className="w-4 h-4" />
-        Filters
-      </button>
+      {/* Mobile trigger row - Filters (opens the drawer) and Sort side by side */}
+      <div className="md:hidden flex items-center gap-2">
+        <button
+          onClick={() => setDrawerOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-elevated text-foreground text-sm font-medium hover:bg-border transition-colors hover:cursor-pointer shrink-0"
+        >
+          <SlidersHorizontal className="w-4 h-4" />
+          Filters
+        </button>
+        <SortControl {...props} compact />
+      </div>
 
-      {/* Mobile bottom-sheet drawer */}
+      {/* Mobile bottom-sheet drawer - dragging the handle down past a threshold
+          (or with enough velocity) closes it, like a native sheet. Drag is
+          scoped to the handle (dragListener={false} + onPointerDown starting
+          dragControls) so scrolling the filter list below it doesn't also drag
+          the sheet. */}
       <AnimatePresence>
         {drawerOpen && (
           <div className="md:hidden fixed inset-0 z-[70]">
@@ -192,8 +258,21 @@ export function LibraryFilters(props: LibraryFiltersProps) {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              drag="y"
+              dragListener={false}
+              dragControls={dragControls}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.6 }}
+              onDragEnd={(_, info) => {
+                if (info.offset.y > 100 || info.velocity.y > 500) {
+                  setDrawerOpen(false)
+                }
+              }}
             >
-              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border/60" />
+              <div
+                onPointerDown={(e) => dragControls.start(e)}
+                className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-border cursor-grab active:cursor-grabbing touch-none"
+              />
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-foreground">Filters</h2>
                 <button

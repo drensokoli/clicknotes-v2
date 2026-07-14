@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { ClientNavigation } from "./client-navigation"
 import { ContentSection } from "./content-section"
-import { MediaDetailsModal } from "./media-details-modal"
 import type { Movie, Series, Book } from "./media-card"
 
 type Section = "movies" | "series" | "books"
@@ -22,7 +21,6 @@ interface MainContentProps {
     series: number
     books: number
   }
-  omdbApiKeys: string[]
 }
 
 export function MainContent({
@@ -35,7 +33,6 @@ export function MainContent({
   tmdbApiKey,
   googleBooksApiKey,
   redisKeysFetched,
-  omdbApiKeys
 }: MainContentProps) {
   // Start with undefined to prevent flash of incorrect selected state
   const [activeSection, setActiveSection] = useState<Section | undefined>(undefined)
@@ -96,9 +93,6 @@ export function MainContent({
           externalSearchResults={searchResults}
           onQueryChange={handleQueryChange}
           onResultsChange={handleResultsChange}
-        />
-        <MediaDetailsModal
-          omdbApiKeys={omdbApiKeys}
         />
       </main>
     </>

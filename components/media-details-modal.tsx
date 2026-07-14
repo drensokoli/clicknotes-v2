@@ -3,7 +3,7 @@
 import { X, Star, Calendar, ExternalLink, Play, Eye, Bookmark, User, MonitorPlay, BookOpen, Share2 } from "lucide-react"
 import { getOmdbData } from "@/lib/omdb-helpers"
 import Image from "next/image"
-import { useModal } from "./modal-provider"
+import type { MediaItem } from "./media-card"
 import { useSavedMedia } from "./saved-media-provider"
 import { useEffect, useState } from "react"
 import { fetchMovieDetails, fetchTVDetails, getGenreNames, getYouTubeTrailer, type MovieDetails, type TVDetails } from "@/lib/tmdb-details"
@@ -13,11 +13,20 @@ import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 
 interface MediaDetailsModalProps {
+  item: MediaItem | null
+  isOpen: boolean
+  onClose: () => void
+  tmdbApiKey: string
   omdbApiKeys: string[]
 }
 
-export function MediaDetailsModal({ omdbApiKeys }: MediaDetailsModalProps) {
-  const { isModalOpen, modalContent: item, closeModal, tmdbApiKey } = useModal()
+export function MediaDetailsModal({
+  item,
+  isOpen: isModalOpen,
+  onClose: closeModal,
+  tmdbApiKey,
+  omdbApiKeys,
+}: MediaDetailsModalProps) {
   const { getStatus, toggle } = useSavedMedia()
   const [detailedData, setDetailedData] = useState<MovieDetails | TVDetails | null>(null)
   const [omdbData, setOmdbData] = useState<{ imdbId: string } | null>(null)

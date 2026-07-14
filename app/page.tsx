@@ -63,11 +63,6 @@ export default async function Home() {
   const googleBooksApiKey = process.env.GOOGLE_BOOKS_API_KEY_2!
   const nyTimesApiKey = process.env.NYTIMES_API_KEY!
   const baseUrl = process.env.BASE_URL || 'http://localhost:3000'
-  const omdbApiKeys = [
-    process.env.OMDB_API_KEY_1!,
-    process.env.OMDB_API_KEY_2!,
-    process.env.OMDB_API_KEY_3!,
-  ]
 
   let movies: Movie[] = []
   let series: Series[] = []
@@ -159,7 +154,6 @@ export default async function Home() {
         tmdbApiKey={tmdbApiKey}
         googleBooksApiKey={googleBooksApiKey}
         redisKeysFetched={redisKeysFetched}
-        omdbApiKeys={omdbApiKeys}
       />
       </div>
     </div>

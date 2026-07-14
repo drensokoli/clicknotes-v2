@@ -4,7 +4,6 @@ import * as React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { MediaCard, MediaItem, Movie, Series, Book } from "./media-card"
 import { searchContentByTitle, searchBooksByTitle } from "@/lib/api-helpers"
-import { useModal } from "./modal-provider"
 import { useSlashFocus } from "@/hooks/use-slash-focus"
 import { ScrollToTopButton } from "./scroll-to-top-button"
 
@@ -117,13 +116,6 @@ export function ContentSection({
   onQueryChange,
   onResultsChange
 }: ContentSectionProps) {
-  const { setTmdbApiKey } = useModal()
-  
-  // Set TMDB API key in modal context
-  useEffect(() => {
-    setTmdbApiKey(tmdbApiKey)
-  }, [tmdbApiKey, setTmdbApiKey])
-
   // Log rankings data for debugging
   useEffect(() => {
     console.log('📊 ContentSection rankings received:', {

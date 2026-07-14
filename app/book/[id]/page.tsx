@@ -2,7 +2,6 @@ import "../../setup" // Setup SSL configuration first
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { fetchBookItem } from "@/lib/media-lookup"
-import { MediaDetailsModal } from "@/components/media-details-modal"
 import { MediaLandingClient } from "@/components/media-landing-client"
 
 interface BookPageProps {
@@ -39,9 +38,6 @@ export default async function BookPage({ params }: BookPageProps) {
   ]
 
   return (
-    <>
-      <MediaLandingClient item={item} tmdbApiKey={process.env.TMDB_API_KEY || ""} />
-      <MediaDetailsModal omdbApiKeys={omdbApiKeys} />
-    </>
+    <MediaLandingClient item={item} tmdbApiKey={process.env.TMDB_API_KEY || ""} omdbApiKeys={omdbApiKeys} />
   )
 }

@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
-import { ModalProvider } from "@/components/modal-provider";
 import { SavedMediaProvider } from "@/components/saved-media-provider";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -44,8 +43,10 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({
   children,
+  modal,
 }: Readonly<{
   children: React.ReactNode;
+  modal: React.ReactNode;
 }>) {
   let session = null;
   
@@ -67,10 +68,9 @@ export default async function RootLayout({
             disableTransitionOnChange={true}
           >
             <SavedMediaProvider>
-              <ModalProvider>
-                {children}
-                <Analytics />
-              </ModalProvider>
+              {children}
+              {modal}
+              <Analytics />
             </SavedMediaProvider>
             <Footer />
             <PWAInstallToast />

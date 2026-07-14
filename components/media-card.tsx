@@ -1,7 +1,8 @@
 import Image from "next/image"
+import Link from "next/link"
 import { Star } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useModal } from "./modal-provider"
+import { getMediaHref } from "@/lib/media-url"
 import { useSavedMedia } from "./saved-media-provider"
 import { useState, useEffect, useRef, memo } from "react"
 import { useTheme } from "next-themes"
@@ -173,7 +174,6 @@ interface MediaCardProps {
 }
 
 function MediaCardComponent({ item, className, priority = false, loading = "lazy" }: MediaCardProps) {
-  const { openModal } = useModal()
   const { getStatus, toggle } = useSavedMedia()
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
@@ -418,8 +418,15 @@ function MediaCardComponent({ item, className, priority = false, loading = "lazy
               </svg>
             </button>
 
-            {/* Info Button - the only way to open the detail modal */}
-            <button
+            {/* Info Button - the only way to open the detail modal. A real Link
+                to the item's canonical URL rather than a JS-only click handler:
+                Next intercepts this navigation into the @modal parallel route
+                (see app/@modal/(.)movie/[id]/page.tsx) when clicked from within
+                the app, showing it as an overlay without unmounting whatever's
+                underneath - and it still works as a plain link (new tab,
+                keyboard, crawlers) since it's a real <a href>. */}
+            <Link
+              href={getMediaHref(item.type, item.id)}
               className={cn(
                 "w-10 h-10 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm hover:cursor-pointer",
                 "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
@@ -430,15 +437,12 @@ function MediaCardComponent({ item, className, priority = false, loading = "lazy
                 color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
               }}
               title="View Details"
-              onClick={(e) => {
-                e.stopPropagation();
-                openModal(item);
-              }}
+              onClick={(e) => e.stopPropagation()}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-            </button>
+            </Link>
           </div>
         </div>
 

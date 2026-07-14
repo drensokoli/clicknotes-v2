@@ -2,7 +2,6 @@ import "../../setup" // Setup SSL configuration first
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { fetchMovieItem } from "@/lib/media-lookup"
-import { MediaDetailsModal } from "@/components/media-details-modal"
 import { MediaLandingClient } from "@/components/media-landing-client"
 
 interface MoviePageProps {
@@ -39,10 +38,5 @@ export default async function MoviePage({ params }: MoviePageProps) {
     process.env.OMDB_API_KEY_3 || "",
   ]
 
-  return (
-    <>
-      <MediaLandingClient item={item} tmdbApiKey={tmdbApiKey} />
-      <MediaDetailsModal omdbApiKeys={omdbApiKeys} />
-    </>
-  )
+  return <MediaLandingClient item={item} tmdbApiKey={tmdbApiKey} omdbApiKeys={omdbApiKeys} />
 }

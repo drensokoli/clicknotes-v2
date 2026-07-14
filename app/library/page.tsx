@@ -29,12 +29,5 @@ export default async function LibraryPage() {
     savedAt: d.createdAt.toISOString(),
   }))
 
-  const tmdbApiKey = process.env.TMDB_API_KEY || ""
-  const omdbApiKeys = [
-    process.env.OMDB_API_KEY_1 || "",
-    process.env.OMDB_API_KEY_2 || "",
-    process.env.OMDB_API_KEY_3 || "",
-  ]
-
-  return <SavedList items={items} tmdbApiKey={tmdbApiKey} omdbApiKeys={omdbApiKeys} />
+  return <SavedList items={items} />
 }

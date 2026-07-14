@@ -1,30 +1,29 @@
 "use client"
 
-import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { useModal } from "./modal-provider"
+import { MediaDetailsModal } from "./media-details-modal"
 import type { MediaItem } from "./media-card"
 
 interface MediaLandingClientProps {
   item: MediaItem
   tmdbApiKey: string
+  omdbApiKeys: string[]
 }
 
 // Rendered by app/movie/[id]/page.tsx, app/series/[id]/page.tsx, and
-// app/book/[id]/page.tsx - opens the details modal for a directly-visited
-// share link (see components/modal-provider.tsx's `seededFromUrl`), over a
-// minimal background so there's something sensible if the modal is closed
-// before it navigates home.
-export function MediaLandingClient({ item, tmdbApiKey }: MediaLandingClientProps) {
-  const { openModal, setTmdbApiKey } = useModal()
-
-  useEffect(() => {
-    setTmdbApiKey(tmdbApiKey)
-    openModal(item, { seededFromUrl: true })
-    // Only ever run once, for the item this page was loaded with.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+// app/book/[id]/page.tsx for a directly-visited share link (typed URL, reload,
+// or a link opened from outside the app) - there's no prior in-app page to
+// return to, so closing navigates home instead of going back. Renders over a
+// minimal background so there's something sensible underneath the modal.
+//
+// A same-app click on a card never reaches this file - it's intercepted into
+// the @modal parallel route instead (see app/@modal/(.)movie/[id]/page.tsx and
+// components/media-modal-route.tsx), which closes via router.back() to return
+// to the exact page/scroll/filter state the user clicked from.
+export function MediaLandingClient({ item, tmdbApiKey, omdbApiKeys }: MediaLandingClientProps) {
+  const router = useRouter()
 
   return (
     <div className="min-h-screen bg-background">
@@ -39,6 +38,13 @@ export function MediaLandingClient({ item, tmdbApiKey }: MediaLandingClientProps
           </div>
         </div>
       </nav>
+      <MediaDetailsModal
+        item={item}
+        isOpen
+        onClose={() => router.push("/")}
+        tmdbApiKey={tmdbApiKey}
+        omdbApiKeys={omdbApiKeys}
+      />
     </div>
   )
 }
