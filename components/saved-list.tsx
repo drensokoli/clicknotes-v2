@@ -4,12 +4,22 @@ import { useRef, useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
-import { Shuffle as ShuffleIcon } from "lucide-react"
+import { Shuffle as ShuffleIcon, ArrowDownUp, ArrowUp, ArrowDown, ChevronDown } from "lucide-react"
 import { useSavedMedia, type MediaType, type SavedStatus } from "./saved-media-provider"
 import { MediaCard, type MediaItem } from "./media-card"
 import { ShuffleModal } from "./shuffle-modal"
 import { UserProfile } from "./user-profile"
 import { LibraryFilters } from "./library-filters"
+import { Button } from "./ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu"
 import { useSlashFocus } from "@/hooks/use-slash-focus"
 import { ScrollToTopButton } from "./scroll-to-top-button"
 import {
@@ -170,6 +180,7 @@ export function SavedList({ items }: SavedListProps) {
     : statusMatchedItems
   const visibleItems = sortItems(searchedItems, sortField, sortDir)
   const totalCount = filteredItems.filter((item) => effectiveStatus(item) !== null).length
+  const currentSortOption = SORT_FIELD_OPTIONS.find((o) => o.key === sortField)
 
   return (
     <div className="min-h-screen bg-background">
@@ -246,26 +257,40 @@ export function SavedList({ items }: SavedListProps) {
               )}
             </div>
 
-            <div className="hidden md:flex items-center gap-2 ml-auto shrink-0">
-              <select
-                value={sortField}
-                onChange={(e) => setSortField(e.target.value as SortField)}
-                aria-label="Sort by"
-                className="h-10 rounded-lg text-sm pl-3 pr-8 focus:outline-none border border-border/40 bg-surface-elevated focus:ring-2 focus:ring-primary/50 hover:cursor-pointer"
-              >
-                {SORT_FIELD_OPTIONS.map((option) => (
-                  <option key={option.key} value={option.key}>
-                    {typeFilter === "book" && option.bookLabel ? option.bookLabel : option.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-                aria-label={sortDir === "asc" ? "Sort ascending" : "Sort descending"}
-                className="h-10 px-3 rounded-lg text-sm font-medium border border-border/40 bg-surface-elevated text-muted-foreground hover:text-foreground transition-colors hover:cursor-pointer"
-              >
-                {sortDir === "asc" ? "Asc" : "Desc"}
-              </button>
+            <div className="hidden md:block ml-auto shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="h-10 gap-2">
+                    <ArrowDownUp className="w-4 h-4" />
+                    {(typeFilter === "book" && currentSortOption?.bookLabel
+                      ? currentSortOption.bookLabel
+                      : currentSortOption?.label) ?? "Sort"}
+                    <ChevronDown className="w-4 h-4 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-52">
+                  <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={sortField} onValueChange={(v) => setSortField(v as SortField)}>
+                    {SORT_FIELD_OPTIONS.map((option) => (
+                      <DropdownMenuRadioItem key={option.key} value={option.key}>
+                        {typeFilter === "book" && option.bookLabel ? option.bookLabel : option.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Direction</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={sortDir} onValueChange={(v) => setSortDir(v as SortDir)}>
+                    <DropdownMenuRadioItem value="desc">
+                      <ArrowDown className="w-4 h-4" />
+                      Descending
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="asc">
+                      <ArrowUp className="w-4 h-4" />
+                      Ascending
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 

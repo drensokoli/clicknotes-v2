@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { motion, AnimatePresence, useDragControls, type PanInfo } from "framer-motion"
 import { SlidersHorizontal, X, ArrowDownUp, ArrowUp, ArrowDown } from "lucide-react"
 import type { MediaType, SavedStatus } from "./saved-media-provider"
@@ -241,6 +241,16 @@ function MobileDrawer({
   children: React.ReactNode
 }) {
   const dragControls = useDragControls()
+
+  // Block the page behind the sheet from scrolling while it's open.
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden"
+      return () => {
+        document.body.style.overflow = "unset"
+      }
+    }
+  }, [open])
 
   const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (info.offset.y > 100 || info.velocity.y > 500) {

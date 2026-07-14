@@ -47,6 +47,16 @@ export function MediaDetailsModal({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [shareMenuOpen])
 
+  // Block the page behind the modal from scrolling while it's open.
+  useEffect(() => {
+    if (isModalOpen) {
+      document.body.style.overflow = 'hidden'
+      return () => {
+        document.body.style.overflow = 'unset'
+      }
+    }
+  }, [isModalOpen])
+
   // Simple animation variants
   const modalVariants = {
     hidden: { opacity: 0, scale: 0.9, y: 20 },
