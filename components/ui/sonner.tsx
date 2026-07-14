@@ -15,9 +15,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
         {
           "--normal-bg": "var(--surface-elevated)",
           "--normal-text": "var(--foreground)",
-          "--normal-border": "var(--border)",
+          "--normal-border": "var(--primary)",
         } as React.CSSProperties
       }
+      toastOptions={{
+        classNames: {
+          icon: "text-primary",
+        },
+      }}
       {...props}
     />
   )

@@ -1,11 +1,11 @@
 "use client"
 
-import { X, Star, Calendar, ExternalLink, Play, Eye, Bookmark, User, MonitorPlay, BookOpen, Share2 } from "lucide-react"
+import { X, Star, Calendar, ExternalLink, Play, Eye, Bookmark, User, MonitorPlay, BookOpen, Share2, Facebook, Twitter, MessageCircle, Link2 } from "lucide-react"
 import { getOmdbData } from "@/lib/omdb-helpers"
 import Image from "next/image"
 import type { MediaItem } from "./media-card"
 import { useSavedMedia } from "./saved-media-provider"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { fetchMovieDetails, fetchTVDetails, getGenreNames, getYouTubeTrailer, type MovieDetails, type TVDetails } from "@/lib/tmdb-details"
 import { splitBookCategories } from "@/lib/book-categories"
 import { getMediaHref } from "@/lib/media-url"
@@ -31,6 +31,21 @@ export function MediaDetailsModal({
   const [detailedData, setDetailedData] = useState<MovieDetails | TVDetails | null>(null)
   const [omdbData, setOmdbData] = useState<{ imdbId: string } | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [shareMenuOpen, setShareMenuOpen] = useState(false)
+  const shareMenuRef = useRef<HTMLDivElement>(null)
+
+  // Close the share menu on an outside click, same pattern as the user menu
+  // (components/user-profile.tsx).
+  useEffect(() => {
+    if (!shareMenuOpen) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (shareMenuRef.current && !shareMenuRef.current.contains(e.target as Node)) {
+        setShareMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [shareMenuOpen])
 
   // Simple animation variants
   const modalVariants = {
@@ -123,6 +138,23 @@ export function MediaDetailsModal({
       if ((item.type === 'movie' || item.type === 'series') && tmdbApiKey) {
         setIsLoading(true)
 
+        // Live OMDB lookup (for the Stremio Watch link's IMDB id) - needed
+        // whenever the item doesn't already carry `omdbData`, regardless of
+        // whether its TMDB `details` are already cached.
+        const fetchOmdbData = async () => {
+          const year = item.type === 'movie'
+            ? new Date(item.release_date).getFullYear().toString()
+            : new Date(item.first_air_date).getFullYear().toString()
+
+          const omdb = await getOmdbData(
+            omdbApiKeys,
+            item.type === 'movie' ? item.title : item.name,
+            year,
+            item.type === 'movie' ? 'movie' : 'series'
+          )
+          if (omdb) setOmdbData(omdb)
+        }
+
         const fetchDetails = async () => {
           try {
             // A `details` object only counts as "already cached" if it has a
@@ -132,31 +164,24 @@ export function MediaDetailsModal({
             // treating those as complete permanently hid the Watch/Trailer
             // buttons and embed for them.
             const hasFullDetails = 'details' in item && item.details && typeof item.details === 'object' && 'videos' in item.details
+            const existingOmdbData = 'omdbData' in item ? item.omdbData : undefined
 
-            // Check if we already have detailed data in the item (from Redis)
-            if (hasFullDetails && 'omdbData' in item && item.omdbData) {
-              console.log('✅ Using cached detailed data from Redis');
-              setDetailedData(item.details as MovieDetails | TVDetails);
-              setOmdbData(item.omdbData);
-              setIsLoading(false);
-              return;
-            }
-
-            // Also check if the data might be nested differently
             if (hasFullDetails) {
-              console.log('✅ Found details data, checking structure...');
-              // The details might already contain what we need
               setDetailedData(item.details as MovieDetails | TVDetails);
 
-              if ('omdbData' in item && item.omdbData) {
-                setOmdbData(item.omdbData);
+              // TMDB details being cached doesn't mean OMDB data is too - e.g.
+              // items fetched fresh via lib/media-lookup.ts for the /movie/[id]
+              // etc. pages always have full TMDB details but never embed
+              // omdbData, so the Stremio Watch button still needs this fetch.
+              if (existingOmdbData) {
+                setOmdbData(existingOmdbData);
+              } else {
+                await fetchOmdbData();
               }
 
               setIsLoading(false);
               return;
             }
-
-            console.log('🔄 Fetching fresh details from APIs (not in Redis cache)');
 
             // Fetch TMDB details only if not cached
             let details = null
@@ -167,21 +192,10 @@ export function MediaDetailsModal({
             }
             setDetailedData(details)
 
-            // Fetch OMDB data only if not cached
-            if (!('omdbData' in item) || !item.omdbData) {
-              const year = item.type === 'movie'
-                ? new Date(item.release_date).getFullYear().toString()
-                : new Date(item.first_air_date).getFullYear().toString()
-
-              const omdb = await getOmdbData(
-                omdbApiKeys,
-                item.type === 'movie' ? item.title : item.name,
-                year,
-                item.type === 'movie' ? 'movie' : 'series'
-              )
-              if (omdb) setOmdbData(omdb)
+            if (existingOmdbData) {
+              setOmdbData(existingOmdbData);
             } else {
-              setOmdbData(item.omdbData);
+              await fetchOmdbData();
             }
 
           } catch (error) {
@@ -299,20 +313,29 @@ export function MediaDetailsModal({
     return null
   }
 
-  const handleShare = async () => {
-    const url = `${window.location.origin}${getMediaHref(item.type, item.id)}`
+  const getShareUrl = () => `${window.location.origin}${getMediaHref(item.type, item.id)}`
 
+  // Mobile/Safari-style native share sheet where available; everywhere else
+  // (most desktop browsers don't implement the Web Share API) opens a small
+  // menu with per-platform share links plus copy-link, instead of silently
+  // just copying the link.
+  const handleShare = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({ title: getTitle(), url })
+        await navigator.share({ title: getTitle(), url: getShareUrl() })
       } catch {
         // User cancelled the share sheet - not an error.
       }
       return
     }
 
-    await navigator.clipboard.writeText(url)
+    setShareMenuOpen((open) => !open)
+  }
+
+  const handleCopyLink = async () => {
+    await navigator.clipboard.writeText(getShareUrl())
     toast('Link copied to clipboard')
+    setShareMenuOpen(false)
   }
 
   const getCast = () => {
@@ -633,18 +656,71 @@ export function MediaDetailsModal({
                       <span className="hidden sm:inline">View Trailer</span>
                     </motion.button>
                   )}
-                  {/* Share */}
-                  <motion.button
-                    onClick={handleShare}
-                    className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-surface-elevated hover:bg-border text-foreground rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
-                    variants={buttonVariants}
-                    custom={4}
-                    whileHover="hover"
-                    whileTap="tap"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    <span className="hidden sm:inline">Share</span>
-                  </motion.button>
+                  {/* Share - native share sheet where available (handleShare),
+                      else a dropdown with per-platform links + copy-link. */}
+                  <div className="relative" ref={shareMenuRef}>
+                    <motion.button
+                      onClick={handleShare}
+                      className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-surface-elevated hover:bg-border text-foreground rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
+                      variants={buttonVariants}
+                      custom={4}
+                      whileHover="hover"
+                      whileTap="tap"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      <span className="hidden sm:inline">Share</span>
+                    </motion.button>
+
+                    <AnimatePresence>
+                      {shareMenuOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-48 bg-background rounded-xl py-2 z-20 shadow-lg border border-border"
+                        >
+                          <a
+                            href={`https://wa.me/?text=${encodeURIComponent(`${getTitle()} ${getShareUrl()}`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setShareMenuOpen(false)}
+                            className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
+                          >
+                            <MessageCircle className="w-4 h-4 mr-3 text-green-600" />
+                            WhatsApp
+                          </a>
+                          <a
+                            href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getShareUrl())}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setShareMenuOpen(false)}
+                            className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
+                          >
+                            <Facebook className="w-4 h-4 mr-3 text-blue-600" />
+                            Facebook
+                          </a>
+                          <a
+                            href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(getShareUrl())}&text=${encodeURIComponent(getTitle())}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setShareMenuOpen(false)}
+                            className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
+                          >
+                            <Twitter className="w-4 h-4 mr-3 text-sky-500" />
+                            X (Twitter)
+                          </a>
+                          <button
+                            onClick={handleCopyLink}
+                            className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
+                          >
+                            <Link2 className="w-4 h-4 mr-3 text-muted-foreground" />
+                            Copy Link
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
 
                   {/* More Button */}
                   {getExternalLink() && (
