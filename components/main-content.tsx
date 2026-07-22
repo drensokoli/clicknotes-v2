@@ -14,7 +14,7 @@ interface MainContentProps {
   movieRanking?: Array<{value: string, score: number}>
   seriesRanking?: Array<{value: string, score: number}>
   bookRanking?: Array<{value: string, score: number}>
-  googleBooksApiKey: string
+  googleBooksApiKeys: string[]
   redisKeysFetched: {
     movies: number
     series: number
@@ -29,7 +29,7 @@ export function MainContent({
   movieRanking = [],
   seriesRanking = [],
   bookRanking = [],
-  googleBooksApiKey,
+  googleBooksApiKeys,
   redisKeysFetched,
 }: MainContentProps) {
   // Start with undefined to prevent flash of incorrect selected state
@@ -83,7 +83,7 @@ export function MainContent({
           movieRanking={movieRanking}
           seriesRanking={seriesRanking}
           bookRanking={bookRanking}
-          googleBooksApiKey={googleBooksApiKey}
+          googleBooksApiKeys={googleBooksApiKeys}
           redisKeysFetched={redisKeysFetched}
           externalActiveSection={activeSection}
           externalSearchQuery={searchQuery}

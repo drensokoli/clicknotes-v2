@@ -116,7 +116,7 @@ interface ContentSectionProps {
   movieRanking?: Array<{value: string, score: number}>
   seriesRanking?: Array<{value: string, score: number}>
   bookRanking?: Array<{value: string, score: number}>
-  googleBooksApiKey: string
+  googleBooksApiKeys: string[]
   // Progressive loading props
   redisKeysFetched?: {
     movies: number
@@ -140,7 +140,7 @@ export function ContentSection({
   movieRanking = [],
   seriesRanking = [],
   bookRanking = [],
-  googleBooksApiKey,
+  googleBooksApiKeys,
   redisKeysFetched = { movies: 1, series: 1, books: 1 },
   externalActiveSection,
   externalSearchQuery,
@@ -672,7 +672,7 @@ export function ContentSection({
           })
           results = tvResults.map((tv: Series) => ({ ...tv, type: "series" as const }))
         } else if (activeSection === "books") {
-          const bookResults = await searchBooksByTitle(searchQuery, googleBooksApiKey)
+          const bookResults = await searchBooksByTitle(searchQuery, googleBooksApiKeys)
           results = bookResults.map((book: Book) => ({ ...book, type: "book" as const }))
         }
 
@@ -687,7 +687,7 @@ export function ContentSection({
     }, 300)
 
     return () => clearTimeout(debounceTimeout.current!)
-  }, [searchQuery, activeSection, googleBooksApiKey, activePerson, setSearchResults])
+  }, [searchQuery, activeSection, googleBooksApiKeys, activePerson, setSearchResults])
 
   const getCurrentData = (): MediaItem[] => {
     if (searchQuery.trim()) {

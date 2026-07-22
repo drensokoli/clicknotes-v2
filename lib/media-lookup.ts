@@ -82,39 +82,50 @@ function toBook(id: string, vi: Record<string, unknown>, saleInfo: unknown): Boo
 const ISBN_PATTERN = /^\d{10}(\d{3})?$/
 
 // Google Books' API returns a transient 503 ("backendFailed") often enough in
-// practice that a bare single-shot fetch isn't reliable - retry once after a
-// short delay before giving up.
-async function fetchWithRetry(url: string): Promise<Response | null> {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 400))
-    try {
-      const response = await fetch(url)
-      if (response.ok) return response
-    } catch {
-      // fall through to retry/return null below
+// practice - and its per-key daily quota is low enough to actually run out -
+// that a bare single-shot fetch on one key isn't reliable. Try each provided
+// key in turn (same "rotate through keys, first success wins" shape as
+// lib/omdb-helpers.ts's getOmdbData), retrying once per key on a transient
+// failure before moving to the next.
+async function fetchWithKeyRotation(buildUrl: (key?: string) => string, apiKeys: string[]): Promise<Response | null> {
+  const keys = apiKeys.length > 0 ? apiKeys : [undefined]
+
+  for (const key of keys) {
+    const url = buildUrl(key)
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 400))
+      try {
+        const response = await fetch(url)
+        if (response.ok) return response
+        // A 403/429 on this key means its quota is exhausted - move on to the
+        // next key immediately instead of burning the retry on a key that
+        // won't recover within this request.
+        if (response.status === 403 || response.status === 429) break
+      } catch {
+        // fall through to retry/next key below
+      }
     }
   }
+
   return null
 }
 
-async function fetchBookByVolumeId(id: string, googleBooksApiKey?: string): Promise<Book | null> {
-  const url = googleBooksApiKey
-    ? `https://www.googleapis.com/books/v1/volumes/${id}?key=${googleBooksApiKey}`
-    : `https://www.googleapis.com/books/v1/volumes/${id}`
-
-  const response = await fetchWithRetry(url)
+async function fetchBookByVolumeId(id: string, googleBooksApiKeys: string[]): Promise<Book | null> {
+  const response = await fetchWithKeyRotation(
+    (key) => `https://www.googleapis.com/books/v1/volumes/${id}${key ? `?key=${key}` : ""}`,
+    googleBooksApiKeys,
+  )
   if (!response) return null
 
   const data = await response.json()
   return toBook(data.id, data.volumeInfo || {}, data.saleInfo)
 }
 
-async function fetchBookByIsbn(isbn: string, googleBooksApiKey?: string): Promise<Book | null> {
-  const url = googleBooksApiKey
-    ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&key=${googleBooksApiKey}`
-    : `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`
-
-  const response = await fetchWithRetry(url)
+async function fetchBookByIsbn(isbn: string, googleBooksApiKeys: string[]): Promise<Book | null> {
+  const response = await fetchWithKeyRotation(
+    (key) => `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}${key ? `&key=${key}` : ""}`,
+    googleBooksApiKeys,
+  )
   if (!response) return null
 
   const data = await response.json()
@@ -127,16 +138,16 @@ async function fetchBookByIsbn(isbn: string, googleBooksApiKey?: string): Promis
   return toBook(isbn, item.volumeInfo || {}, item.saleInfo)
 }
 
-export const fetchBookItem = cache(async (id: string, googleBooksApiKey?: string): Promise<Book | null> => {
+export const fetchBookItem = cache(async (id: string, googleBooksApiKeys: string[]): Promise<Book | null> => {
   if (ISBN_PATTERN.test(id)) {
-    return fetchBookByIsbn(id, googleBooksApiKey)
+    return fetchBookByIsbn(id, googleBooksApiKeys)
   }
 
-  const direct = await fetchBookByVolumeId(id, googleBooksApiKey)
+  const direct = await fetchBookByVolumeId(id, googleBooksApiKeys)
   if (direct) return direct
 
   // Not ISBN-shaped and the direct lookup still failed - unlikely, but try
   // an ISBN search anyway before giving up, in case it's an ISBN with a
   // shape we didn't anticipate.
-  return fetchBookByIsbn(id, googleBooksApiKey)
+  return fetchBookByIsbn(id, googleBooksApiKeys)
 })

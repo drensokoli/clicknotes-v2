@@ -61,6 +61,9 @@ export default async function Home() {
   
   const tmdbApiKey = process.env.TMDB_API_KEY!
   const googleBooksApiKey = process.env.GOOGLE_BOOKS_API_KEY_2!
+  const googleBooksApiKeys = [process.env.GOOGLE_BOOKS_API_KEY_1, process.env.GOOGLE_BOOKS_API_KEY_2].filter(
+    (key): key is string => Boolean(key),
+  )
   const nyTimesApiKey = process.env.NYTIMES_API_KEY!
   const baseUrl = process.env.BASE_URL || 'http://localhost:3000'
 
@@ -151,7 +154,7 @@ export default async function Home() {
         movieRanking={movieRanking}
         seriesRanking={seriesRanking}
         bookRanking={bookRanking}
-        googleBooksApiKey={googleBooksApiKey}
+        googleBooksApiKeys={googleBooksApiKeys}
         redisKeysFetched={redisKeysFetched}
       />
       </div>

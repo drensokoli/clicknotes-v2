@@ -8,9 +8,13 @@ interface BookPageProps {
   params: Promise<{ id: string }>
 }
 
+const googleBooksApiKeys = [process.env.GOOGLE_BOOKS_API_KEY_1, process.env.GOOGLE_BOOKS_API_KEY_2].filter(
+  (key): key is string => Boolean(key),
+)
+
 export async function generateMetadata({ params }: BookPageProps): Promise<Metadata> {
   const { id } = await params
-  const item = await fetchBookItem(id, process.env.GOOGLE_BOOKS_API_KEY_2)
+  const item = await fetchBookItem(id, googleBooksApiKeys)
   if (!item) return {}
 
   const image = item.volumeInfo.imageLinks?.thumbnail ?? undefined
@@ -28,7 +32,7 @@ export async function generateMetadata({ params }: BookPageProps): Promise<Metad
 
 export default async function BookPage({ params }: BookPageProps) {
   const { id } = await params
-  const item = await fetchBookItem(id, process.env.GOOGLE_BOOKS_API_KEY_2)
+  const item = await fetchBookItem(id, googleBooksApiKeys)
   if (!item) notFound()
 
   const omdbApiKeys = [

@@ -170,16 +170,25 @@ export const fetchBestsellers = async (googleBooksApiKey: string, nyTimesApiKey:
   }
 };
 
-export const searchBooksByTitle = async (title: string, googleBooksApiKey: string) => {
-  try {
-    const response = await axiosInstance.get(
-      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(title)}&maxResults=40&key=${googleBooksApiKey}`
-    );
-    return response.data.items || [];
-  } catch (error) {
-    console.error('Error searching books:', error);
-    return [];
+// Tries each key in turn - Google Books' per-key daily quota is low enough
+// to actually run out, and a single exhausted key otherwise takes book search
+// down entirely with no fallback (same rotation shape as lib/omdb-helpers.ts's
+// getOmdbData and lib/media-lookup.ts's book detail lookups).
+export const searchBooksByTitle = async (title: string, googleBooksApiKeys: string[]) => {
+  const keys = googleBooksApiKeys.length > 0 ? googleBooksApiKeys : [undefined];
+
+  for (const key of keys) {
+    try {
+      const response = await axiosInstance.get(
+        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(title)}&maxResults=40${key ? `&key=${key}` : ""}`
+      );
+      return response.data.items || [];
+    } catch (error) {
+      console.error('Error searching books:', error);
+    }
   }
+
+  return [];
 };
 
 // Content search helper (similar to v1's searchContentByTitle)
