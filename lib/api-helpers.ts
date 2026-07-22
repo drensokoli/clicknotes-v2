@@ -178,13 +178,20 @@ export const searchBooksByTitle = async (title: string, googleBooksApiKeys: stri
   const keys = googleBooksApiKeys.length > 0 ? googleBooksApiKeys : [undefined];
 
   for (const key of keys) {
-    try {
-      const response = await axiosInstance.get(
-        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(title)}&maxResults=40${key ? `&key=${key}` : ""}`
-      );
-      return response.data.items || [];
-    } catch (error) {
-      console.error('Error searching books:', error);
+    // One retry per key on top of the rotation itself - Google Books' /volumes
+    // search endpoint (unlike its direct /volumes/{id} lookup, which has been
+    // reliable in the same testing) returns 503 "backendFailed" often enough
+    // to be worth one extra attempt before moving to the next key.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 800));
+      try {
+        const response = await axiosInstance.get(
+          `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(title)}&maxResults=40${key ? `&key=${key}` : ""}`
+        );
+        return response.data.items || [];
+      } catch (error) {
+        console.error('Error searching books:', error);
+      }
     }
   }
 
