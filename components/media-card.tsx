@@ -185,7 +185,7 @@ interface MediaCardProps {
 }
 
 function MediaCardComponent({ item, className, priority = false, loading = "lazy", onOpenInfo }: MediaCardProps) {
-  const { getStatus, toggle, getRating: getUserRating, getBump, toggleBump } = useSavedMedia()
+  const { getStatus, toggle, getRating: getUserRating, getBump } = useSavedMedia()
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   // Explicit JS-driven reveal, distinct from desktop's CSS :hover reveal. Needed because
@@ -282,7 +282,8 @@ function MediaCardComponent({ item, className, priority = false, loading = "lazy
   const savedStatus = getStatus(item.type, item.id);
   // The user's own 1-10 rating, shown as a badge when set (mostly relevant in the Library).
   const userRating = getUserRating(item.type, item.id);
-  // Whether this item is bumped (pinned to the top of the Library).
+  // Whether this item is bumped (pinned to the top of the Library) - read-only here
+  // for the badge below; the toggle control lives only in the detail modal.
   const isBumped = getBump(item.type, item.id) !== null;
 
   return (
@@ -355,34 +356,6 @@ function MediaCardComponent({ item, className, priority = false, loading = "lazy
           showButtons && "pointer-events-auto",
         )}>
           <div className="flex flex-col space-y-2">
-            {/* Bump Button - pins the item to the top of the Library ("watch next").
-                Only shown for saved items (bumping an unsaved item is a no-op).
-                Colored amber when active. */}
-            {savedStatus && (
-              <button
-                className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm hover:cursor-pointer",
-                  "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
-                  "button-slide-up delay-1 media-card-button",
-                )}
-                style={
-                  isBumped
-                    ? { backgroundColor: "rgb(217, 119, 6)", color: "rgb(255, 255, 255)" }
-                    : {
-                        backgroundColor: mounted && resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
-                        color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
-                      }
-                }
-                title={isBumped ? "Unpin from top" : "Bump to top"}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleBump(item.type, item.id);
-                }}
-              >
-                <ChevronsUp className="w-4 h-4" />
-              </button>
-            )}
-
             {/* Save Button */}
             <button
               className={cn(

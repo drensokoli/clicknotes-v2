@@ -679,35 +679,34 @@ export function MediaDetailsModal({
                   </motion.button>
                 </div>
 
-                {/* Library actions for a saved item: bump-to-top, plus the personal
-                    rating (any status). Rating is independent of status; completing an
-                    item also surfaces it via the celebration overlay (saved-media-provider). */}
+                {/* Library actions for a saved item: your personal rating (any status -
+                    completing an item also surfaces this via the celebration overlay,
+                    see saved-media-provider.tsx) plus a compact bump-to-top toggle.
+                    Kept to one slim row, distinct from the bigger status/external-link
+                    button rows above/below so it doesn't visually compete with them. */}
                 {savedStatus && (
-                  <div className="flex flex-col items-center gap-3 pt-1">
-                    <motion.button
-                      onClick={() => toggleBump(item.type, item.id)}
-                      className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer ${
-                        isBumped
-                          ? "bg-amber-600 text-white ring-2 ring-amber-300"
-                          : "bg-surface-elevated text-foreground hover:bg-border"
-                      }`}
-                      whileHover={{ scale: 1.05, y: -2 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <ChevronsUp className="w-4 h-4" />
-                      <span>{isBumped ? "Pinned to top" : "Bump to top"}</span>
-                    </motion.button>
-
-                    <div className="flex flex-col items-center gap-1.5">
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        Your rating
-                      </span>
+                  <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-muted-foreground">Your rating</span>
                       <RatingStars
                         value={getUserRating(item.type, item.id)}
                         onChange={(value) => rate(item.type, item.id, value)}
-                        size={20}
+                        size={16}
                       />
                     </div>
+
+                    <button
+                      onClick={() => toggleBump(item.type, item.id)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors hover:cursor-pointer ${
+                        isBumped
+                          ? "bg-amber-600 text-white"
+                          : "bg-surface-elevated text-muted-foreground hover:text-foreground hover:bg-border"
+                      }`}
+                      title={isBumped ? "Unpin from top of your Library" : "Bump to top of your Library"}
+                    >
+                      <ChevronsUp className="w-3.5 h-3.5" />
+                      {isBumped ? "Pinned to top" : "Bump to top"}
+                    </button>
                   </div>
                 )}
 
