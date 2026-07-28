@@ -399,10 +399,12 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
       {/* In-place detail modal with prev/next through the list as it was when the
           modal opened (see the carouselItems snapshot above) - the order honors
           whatever filtering/sorting/bumping was applied at that moment, and stays
-          put even if you change an item's status while browsing. */}
+          put even if you change an item's status while browsing.
+          Deliberately no `key` on the modal: keying it on the item would remount the
+          whole thing on every prev/next, replaying the open-from-scratch animation.
+          The shell stays mounted and only its content slides - see MediaDetailsModal. */}
       {activeIndex !== null && carouselItems && carouselItems[activeIndex] && (
         <MediaDetailsModal
-          key={`${carouselItems[activeIndex].mediaType}:${carouselItems[activeIndex].mediaId}`}
           item={carouselItems[activeIndex].card as unknown as MediaItem}
           isOpen
           onClose={closeInfo}

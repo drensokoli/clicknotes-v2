@@ -78,10 +78,17 @@ export async function enrichCardForSave(
   if (!tmdbApiKey || (mediaType !== "movie" && mediaType !== "series")) return card
   if (card.id === undefined || card.id === null) return card
 
+  // Credits are checked separately from runtime because they go missing independently:
+  // Redis/Popular cards carry a runtime but ship `credits: {cast: [], crew: []}` (the
+  // population job never fetched them), so keying the skip on runtime alone meant those
+  // saves silently never got a cast - and therefore never got a searchable `people`
+  // list. Fetch whenever EITHER signal is absent.
+  const hasCredits = (card.details?.credits?.cast?.length ?? 0) > 0
+
   try {
     if (mediaType === "movie") {
-      // Already has a runtime (e.g. saved from a Popular card) - nothing to do.
-      if (typeof card.details?.runtime === "number") return card
+      const hasRuntime = typeof card.details?.runtime === "number"
+      if (hasRuntime && hasCredits) return card
       const details = await fetchMovieDetails(Number(card.id), tmdbApiKey)
       if (!details) return card
       return {
@@ -91,9 +98,10 @@ export async function enrichCardForSave(
       }
     }
 
-    // series - treat "no enriched details yet" (no genres block) as needing a fetch,
-    // since some shows legitimately have an empty episode_run_time.
-    if (card.details?.genres && card.details.genres.length > 0) return card
+    // series - "has genres" stands in for "has enriched details", since some shows
+    // legitimately have an empty episode_run_time.
+    const hasSeriesDetails = Boolean(card.details?.genres && card.details.genres.length > 0)
+    if (hasSeriesDetails && hasCredits) return card
     const details = await fetchTVDetails(Number(card.id), tmdbApiKey)
     if (!details) return card
     return {

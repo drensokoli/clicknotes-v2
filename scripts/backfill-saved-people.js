@@ -73,10 +73,18 @@ async function main() {
     await client.connect()
     const collection = client.db(dbName).collection(COLLECTION)
 
+    // Match every "no usable people list" shape, not just a missing field: the Node
+    // MongoDB driver serializes `undefined` as `null`, so cards saved through
+    // toSlimCard without derivable credits store `people: null` (the field is present)
+    // and would be skipped by an $exists check alone.
     const candidates = await collection
       .find({
         mediaType: { $in: ['movie', 'series'] },
-        'card.people': { $exists: false },
+        $or: [
+          { 'card.people': { $exists: false } },
+          { 'card.people': null },
+          { 'card.people': { $size: 0 } },
+        ],
       })
       .toArray()
 

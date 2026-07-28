@@ -73,7 +73,13 @@ const nextConfig: NextConfig = {
   },
   
   images: {
-    // Image optimization settings
+    // Serve remote images straight from their own CDNs rather than through Vercel's
+    // Image Optimization - see the fuller explanation in next.config.js. Every image
+    // here is an already-compressed, already-sized poster from TMDB/Google Books/NYT,
+    // and each source URL x srcset width burned a separate transformation against the
+    // plan quota; once exhausted, uncached variants simply fail to load.
+    unoptimized: true,
+    // Kept for the (now unused) optimizer path and for any future local images.
     formats: ['image/webp', 'image/avif'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],

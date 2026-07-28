@@ -14,6 +14,28 @@ import { getMediaHref } from "@/lib/media-url"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 
+// Library Genesis search, restricted to the same columns/objects/topics the site's own
+// advanced search submits - copying its query string is the only way to get a usable
+// result set, since a bare ?req= returns nothing useful.
+const LIBGEN_SEARCH_PARAMS =
+  "&columns%5B%5D=t&columns%5B%5D=a&columns%5B%5D=s&columns%5B%5D=y&columns%5B%5D=p&columns%5B%5D=i" +
+  "&objects%5B%5D=f&objects%5B%5D=e&objects%5B%5D=s&objects%5B%5D=a&objects%5B%5D=p&objects%5B%5D=w" +
+  "&topics%5B%5D=l&topics%5B%5D=c&topics%5B%5D=f&topics%5B%5D=a&topics%5B%5D=m&topics%5B%5D=r&topics%5B%5D=s" +
+  "&res=25&filesuns=all"
+
+// libgen.li expects form-style encoding: spaces become "+", and the sub-delimiters
+// encodeURIComponent leaves untouched (!'()*) are percent-encoded too, matching what
+// the site's own search form produces.
+function buildLibgenUrl(title: string): string {
+  const query = encodeURIComponent(title)
+    .replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+    .replace(/%20/g, "+")
+  return `https://libgen.li/index.php?req=${query}${LIBGEN_SEARCH_PARAMS}`
+}
+
+// Curated list of working Library Genesis mirrors, for when libgen.li itself is down.
+const LIBGEN_MIRRORS_URL = "https://shadowlibraries.github.io/DirectDownloads/libgen/"
+
 interface MediaDetailsModalProps {
   item: MediaItem | null
   isOpen: boolean
@@ -53,6 +75,27 @@ export function MediaDetailsModal({
   const shareMenuRef = useRef<HTMLDivElement>(null)
   // Tracks the start of a horizontal swipe for carousel navigation (Feature 3).
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Which way the carousel last moved, so the content slides in from the correct
+  // side (+1 = went to a later item, -1 = an earlier one).
+  const [navDirection, setNavDirection] = useState(1)
+  const prevPositionRef = useRef(position)
+  useEffect(() => {
+    const previous = prevPositionRef.current
+    if (position !== undefined && previous !== undefined && position !== previous) {
+      setNavDirection(position > previous ? 1 : -1)
+    }
+    prevPositionRef.current = position
+  }, [position])
+
+  // Each carousel step swaps the content in place (the modal shell never unmounts),
+  // so reset the scroll position manually - otherwise the next item opens halfway
+  // down wherever the previous one was scrolled to.
+  const itemKey = item ? `${item.type}:${item.id}` : null
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 })
+  }, [itemKey])
 
   // Close the share menu on an outside click, same pattern as the user menu
   // (components/user-profile.tsx).
@@ -106,17 +149,18 @@ export function MediaDetailsModal({
     exit: { opacity: 0, transition: { duration: 0.25, ease: "easeIn" as const } }
   }
 
-  const contentVariants = {
-    hidden: { opacity: 0, y: 10 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: 0.4,
-        delay: 0.2,
-        ease: "easeOut" as const
-      }
-    }
+  // Carousel content transition: the item slides in from the side it came from and
+  // the old one slides out the other way. Kept short and delay-free so paging feels
+  // instant - the previous version remounted the whole modal and replayed the full
+  // open animation on every step.
+  const slideVariants = {
+    enter: (direction: number) => ({ opacity: 0, x: direction > 0 ? 60 : -60 }),
+    center: { opacity: 1, x: 0, transition: { duration: 0.18, ease: "easeOut" as const } },
+    exit: (direction: number) => ({
+      opacity: 0,
+      x: direction > 0 ? -60 : 60,
+      transition: { duration: 0.13, ease: "easeIn" as const },
+    }),
   }
 
   // Fetch detailed data when modal opens - only for movies and Series
@@ -481,7 +525,8 @@ export function MediaDetailsModal({
                 is positioned against the scrolling content - meaning it scrolls away
                 together with the hero instead of floating over the whole modal. */}
             <div
-              className="relative flex-1 min-h-0 overflow-y-auto"
+              ref={scrollRef}
+              className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
               onTouchStart={showNav ? handleTouchStart : undefined}
               onTouchEnd={showNav ? handleTouchEnd : undefined}
             >
@@ -576,441 +621,445 @@ export function MediaDetailsModal({
                 </button>
               </div>
 
-              {/* Header with backdrop */}
-              <div className="relative h-48 sm:h-64 md:h-80 overflow-hidden">
-                {getBackdropUrl() ? (
-                  <Image
-                    src={getBackdropUrl()!}
-                    alt={getTitle() || 'Media backdrop image'}
-                    fill
-                    quality={75}
-                    sizes="100vw"
-                    // loading="lazy"
-                    // placeholder="blur"
-                    // blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI3MjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5" />
-                )}
-
-                {/* Gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/80 to-transparent" />
-
-                {/* Content overlay */}
-                <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 md:p-8">
-                                      <div className="flex flex-row gap-4 sm:gap-6 items-end">
-                      {/* Poster */}
-                      <div className="flex flex-shrink-0 mx-auto sm:mx-0 -mt-8 sm:mt-0">
-                      <div className="w-[100px] h-[150px] xs:w-36 xs:h-54 sm:w-28 sm:h-42 md:w-32 md:h-48 lg:w-36 lg:h-54 xl:w-40 xl:h-60 relative overflow-hidden shadow-lg bg-surface-elevated">
-                        {getPosterUrl() ? (
-                          <Image
-                            src={getPosterUrl()!}
-                            alt={getTitle() || 'Media poster image'}
-                            fill
-                            quality={70}
-                            sizes="(max-width: 640px) 120px, (max-width: 768px) 140px, (max-width: 1024px) 160px, 180px"
-                            // loading="lazy"
-                            // placeholder="blur"
-                            // blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgZmlsbD0iIzNBM0E0NCIvPgo8L3N2Zz4="
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-surface-elevated to-surface-tonal flex items-center justify-center">
-                            <span className="text-muted-foreground text-xs text-center px-2">No Image</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Title and basic info */}
-                    <div className="flex-1 min-w-0 text-left">
-                      <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground mb-2 line-clamp-2">
-                        {getTitle()}
-                      </h1>
-
-                      {getAuthors().length > 0 && (
-                        <p className="text-base sm:text-lg text-muted-foreground mb-3">
-                          by {getAuthors().slice(0, 2).join(", ")}
-                          {getAuthors().length > 2 && ` +${getAuthors().length - 2} more`}
-                        </p>
-                      )}
-
-                      <div className="flex flex-wrap items-center justify-start gap-3 sm:gap-4 mb-4">
-                        {getRating() && (
-                          <div className="flex items-center gap-1 text-amber-500">
-                            <Star className="w-4 h-4 fill-current" />
-                            <span className="font-semibold text-sm sm:text-base">
-                              {typeof getRating() === 'number' ? getRating()!.toFixed(1) : getRating()}
-                            </span>
-                          </div>
-                        )}
-
-                        {getReleaseDate() && (
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Calendar className="w-4 h-4" />
-                            <span className="text-sm sm:text-base">{formatDate(getReleaseDate()!)}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Content - one continuous column. "Your library" leads (it's why you
-                  opened this), then the primary Watch/Read action, then the
-                  informational sections. Every block shares the same padding, spacing
-                  and heading style, so nothing reads as a bolted-on panel. */}
-              <motion.div
-                className="p-4 sm:p-6 md:p-8 space-y-6"
-                variants={contentVariants}
-                initial="hidden"
-                animate="visible"
-              >
-                {/* Your library - status, rating and pin-to-top. Same section rhythm as
-                    Genres/Overview/Cast below: a plain heading over full-width content,
-                    deliberately with no nested card or background of its own. */}
-                <div>
-                  <div className="flex items-center justify-between gap-3 mb-3">
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                      Your Library
-                    </h3>
-                    {/* Pin only means something for an item already in the library. */}
-                    {savedStatus && (
-                      <button
-                        onClick={() => toggleBump(item.type, item.id)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors hover:cursor-pointer shrink-0 ${
-                          isBumped
-                            ? 'bg-amber-500 text-black'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-surface-elevated'
-                        }`}
-                        title={isBumped ? 'Unpin from the top of your library' : 'Pin to the top of your library'}
-                      >
-                        <ChevronsUp className="w-3.5 h-3.5" />
-                        {isBumped ? 'Pinned' : 'Pin to top'}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* One state at a time. Clicking the active one removes the item. */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      onClick={() => toggle(item.type, item.id, "to_watch", item)}
-                      title={savedStatus === "to_watch" ? "Click again to remove from your library" : "Save for later"}
-                      className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2.5 rounded-lg text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
-                        savedStatus === "to_watch"
-                          ? "bg-primary text-white"
-                          : "bg-surface-elevated text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <Bookmark className={`w-4 h-4 shrink-0 ${savedStatus === "to_watch" ? "fill-current" : ""}`} />
-                      Saved
-                    </button>
-
-                    <button
-                      onClick={() => toggle(item.type, item.id, "watching", item)}
-                      title={savedStatus === "watching" ? "Click again to remove from your library" : "Mark as in progress"}
-                      className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2.5 rounded-lg text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
-                        savedStatus === "watching"
-                          ? "bg-amber-600 text-white"
-                          : "bg-surface-elevated text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <Play className={`w-4 h-4 shrink-0 ${savedStatus === "watching" ? "fill-current" : ""}`} />
-                      In progress
-                    </button>
-
-                    <button
-                      onClick={() => toggle(item.type, item.id, "watched", item)}
-                      title={savedStatus === "watched" ? "Click again to remove from your library" : "Mark as completed"}
-                      className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2.5 rounded-lg text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
-                        savedStatus === "watched"
-                          ? "bg-green-600 text-white"
-                          : "bg-surface-elevated text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <Eye className={`w-4 h-4 shrink-0 ${savedStatus === "watched" ? "fill-current" : ""}`} />
-                      Completed
-                    </button>
-                  </div>
-
-                  {/* Rating - only meaningful once the item is in the library, and it
-                      belongs directly under the status it accompanies. */}
-                  {savedStatus && (
-                    <div className="mt-4">
-                      <RatingStars
-                        value={getUserRating(item.type, item.id)}
-                        onChange={(value) => rate(item.type, item.id, value)}
-                      />
-                    </div>
+              {/* Everything that belongs to the current item lives inside this keyed
+                  block, so paging swaps just the content with a directional slide
+                  while the modal shell, pager and utility cluster stay put. */}
+              <AnimatePresence mode="wait" custom={navDirection} initial={false}>
+                <motion.div
+                  key={itemKey ?? "item"}
+                  custom={navDirection}
+                  variants={slideVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                >
+                {/* Header with backdrop */}
+                <div className="relative h-48 sm:h-64 md:h-80 overflow-hidden">
+                  {getBackdropUrl() ? (
+                    <Image
+                      src={getBackdropUrl()!}
+                      alt={getTitle() || 'Media backdrop image'}
+                      fill
+                      quality={75}
+                      sizes="100vw"
+                      // loading="lazy"
+                      // placeholder="blur"
+                      // blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4MCIgaGVpZ2h0PSI3MjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5" />
                   )}
-                </div>
 
-                {/* Primary action - Watch (movies/series) or Read (books). Kept high in
-                    the column and full-width so it's unmissable, while still being a
-                    normal section rather than a floating button row. */}
-                {item.type === 'book' ? (
-                  <a
-                    href={`https://annas-archive.org/search?q=${encodeURIComponent(getTitle())}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg transition-colors font-semibold text-sm sm:text-base hover:cursor-pointer"
-                  >
-                    <BookOpen className="w-5 h-5" />
-                    Read this book
-                  </a>
-                ) : isLoading ? (
-                  <div className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg bg-surface-elevated text-muted-foreground text-sm sm:text-base">
-                    <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/40 border-t-transparent animate-spin" />
-                    Finding where to watch...
-                  </div>
-                ) : omdbData?.imdbId ? (
-                  <a
-                    href={`https://www.strem.io/s/${item.type === 'movie' ? 'movie' : 'series'}/${getTitle().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#7B5BF5] hover:bg-[#6344e2] text-white rounded-lg transition-colors font-semibold text-sm sm:text-base hover:cursor-pointer"
-                  >
-                    <MonitorPlay className="w-5 h-5" />
-                    Watch on Stremio
-                  </a>
-                ) : null}
+                  {/* Gradient overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/80 to-transparent" />
 
-                {/* Genres/Categories */}
-                {getGenres().length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.6 }}
-                  >
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                      {item.type === 'book' ? 'Categories' : 'Genres'}
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {getGenres().slice(0, 5).map((genre: string, index: number) => (
-                        <motion.span
-                          key={index}
-                          className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium"
-                          initial={{ opacity: 0, scale: 0.8 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{
-                            duration: 0.3,
-                            delay: 0.7 + (index * 0.1),
-                            ease: "easeOut"
-                          }}
-                          whileHover={{ scale: 1.05 }}
-                        >
-                          {genre}
-                        </motion.span>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Description */}
-                {getDescription() && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                      {item.type === 'book' ? 'Synopsis' : 'Overview'}
-                    </h3>
-                    <p className="text-foreground leading-relaxed text-sm sm:text-base">
-                      {getDescription()}
-                    </p>
-                  </div>
-                )}
-
-                {/* Runtime - moved up under Overview since it's core info, not a footnote */}
-                {getRuntime() ? (
-                  <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                      {item.type === 'movie' ? 'Runtime' : 'Episode Runtime'}
-                    </h3>
-                    <p className="text-foreground text-sm sm:text-base">
-                      {getRuntime()} minutes
-                    </p>
-                  </div>
-                ) : isLoading && (item.type === 'movie' || item.type === 'series') ? (
-                  <div className="h-4 w-24 rounded bg-surface-elevated animate-pulse" />
-                ) : null}
-
-                {/* Critics scores (Rotten Tomatoes / Metacritic / IMDb) - movies &
-                    Series only, from OMDB (see lib/omdb-helpers.ts). Shows nothing
-                    for books or until omdbData resolves. */}
-                {(item.type === 'movie' || item.type === 'series') && (
-                  <CriticsScores
-                    rottenTomatoes={omdbData?.rottenTomatoes}
-                    metacritic={omdbData?.metacritic}
-                    imdbRating={omdbData?.imdbRating}
-                  />
-                )}
-
-                {/* Trailer - Only for movies and Series. Gated on !isLoading so it
-                    doesn't silently pop in mid-fetch without the shared loading
-                    indicator below having shown first (pre-fetched items skip this,
-                    since isLoading resolves to false almost immediately for them). */}
-                {!isLoading && (item.type === 'movie' || item.type === 'series') && getYouTubeVideoId() && (
-                  <motion.div
-                    id="trailer-section"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.8 }}
-                  >
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                      Trailer
-                    </h3>
-                    <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black shadow-lg">
-                      <iframe
-                        src={`https://www.youtube.com/embed/${getYouTubeVideoId()}?rel=0&modestbranding=1&autoplay=0`}
-                        title={getTrailerTitle()}
-                        className="w-full h-full"
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2 text-center">
-                      Click the play button to watch the trailer
-                    </p>
-                  </motion.div>
-                )}
-
-                {/* Cast & Crew - Only for movies and Series */}
-                {!isLoading && (item.type === 'movie' || item.type === 'series') && getCast().length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                      Cast
-                    </h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                      {getCast().map((actor) => (
-                        <div key={actor.id} className="text-center">
-                          <a 
-                            href={`https://google.com/search?q=${encodeURIComponent(actor.name)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block hover:cursor-pointer"
-                          >
-                            <div className="w-16 h-16 sm:w-20 sm:h-20 relative overflow-hidden rounded-full bg-surface-elevated mx-auto mb-2 hover:scale-105 transition-transform">
-                              {actor.profile_path ? (
-                                <Image
-                                  src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
-                                  alt={actor.name}
-                                  fill
-                                  quality={65}
-                                  sizes="(max-width: 640px) 64px, 80px"
-                                  // loading="lazy"
-                                  // placeholder="blur"
-                                  // blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
-                                  className="object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <User className="w-6 h-6 text-muted-foreground" />
-                                </div>
-                              )}
-                            </div>
-                            <p className="text-xs sm:text-sm font-medium text-foreground line-clamp-1 hover:text-primary transition-colors">
-                              {actor.name}
-                            </p>
-                          </a>
-                          <p className="text-xs text-muted-foreground line-clamp-1">
-                            {actor.character}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Director/Creator - Only for movies and Series */}
-                {!isLoading && (item.type === 'movie' || item.type === 'series') && getDirectorOrCreator() && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                      {item.type === 'movie' ? 'Director' : 'Creator'}
-                    </h3>
-                    <div className="flex items-center gap-3">
-                      <a 
-                        href={`https://google.com/search?q=${encodeURIComponent(getDirectorOrCreator()!.name)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 hover:cursor-pointer"
-                      >
-                        <div className="w-12 h-12 relative overflow-hidden rounded-full bg-surface-elevated hover:scale-105 transition-transform">
-                          {getDirectorOrCreator()!.profile_path ? (
+                  {/* Content overlay */}
+                  <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 md:p-8">
+                                        <div className="flex flex-row gap-4 sm:gap-6 items-end">
+                        {/* Poster */}
+                        <div className="flex flex-shrink-0 mx-auto sm:mx-0 -mt-8 sm:mt-0">
+                        <div className="w-[100px] h-[150px] xs:w-36 xs:h-54 sm:w-28 sm:h-42 md:w-32 md:h-48 lg:w-36 lg:h-54 xl:w-40 xl:h-60 relative overflow-hidden shadow-lg bg-surface-elevated">
+                          {getPosterUrl() ? (
                             <Image
-                              src={`https://image.tmdb.org/t/p/w185${getDirectorOrCreator()!.profile_path}`}
-                              alt={getDirectorOrCreator()!.name}
+                              src={getPosterUrl()!}
+                              alt={getTitle() || 'Media poster image'}
                               fill
-                              quality={65}
-                              sizes="48px"
+                              quality={70}
+                              sizes="(max-width: 640px) 120px, (max-width: 768px) 140px, (max-width: 1024px) 160px, 180px"
                               // loading="lazy"
                               // placeholder="blur"
-                              // blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
+                              // blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjE1MCIgZmlsbD0iIzNBM0E0NCIvPgo8L3N2Zz4="
                               className="object-cover"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <User className="w-5 h-5 text-muted-foreground" />
+                            <div className="w-full h-full bg-gradient-to-br from-surface-elevated to-surface-tonal flex items-center justify-center">
+                              <span className="text-muted-foreground text-xs text-center px-2">No Image</span>
                             </div>
                           )}
                         </div>
-                        <span className="text-sm sm:text-base font-medium text-foreground hover:text-primary transition-colors">
-                          {getDirectorOrCreator()!.name}
-                        </span>
+                      </div>
+
+                      {/* Title and basic info */}
+                      <div className="flex-1 min-w-0 text-left">
+                        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground mb-2 line-clamp-2">
+                          {getTitle()}
+                        </h1>
+
+                        {getAuthors().length > 0 && (
+                          <p className="text-base sm:text-lg text-muted-foreground mb-3">
+                            by {getAuthors().slice(0, 2).join(", ")}
+                            {getAuthors().length > 2 && ` +${getAuthors().length - 2} more`}
+                          </p>
+                        )}
+
+                        <div className="flex flex-wrap items-center justify-start gap-3 sm:gap-4 mb-4">
+                          {getRating() && (
+                            <div className="flex items-center gap-1 text-amber-500">
+                              <Star className="w-4 h-4 fill-current" />
+                              <span className="font-semibold text-sm sm:text-base">
+                                {typeof getRating() === 'number' ? getRating()!.toFixed(1) : getRating()}
+                              </span>
+                            </div>
+                          )}
+
+                          {getReleaseDate() && (
+                            <div className="flex items-center gap-1 text-muted-foreground">
+                              <Calendar className="w-4 h-4" />
+                              <span className="text-sm sm:text-base">{formatDate(getReleaseDate()!)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Content - one continuous column. "Your library" leads (it's why you
+                    opened this), then the primary Watch/Read action, then the
+                    informational sections. Every block shares the same padding, spacing
+                    and heading style, so nothing reads as a bolted-on panel. */}
+                <div className="p-4 sm:p-6 md:p-8 space-y-6">
+                  {/* Your library - status, rating and pin-to-top. Same section rhythm as
+                      Genres/Overview/Cast below: a plain heading over full-width content,
+                      deliberately with no nested card or background of its own. */}
+                  <div>
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                        Your Library
+                      </h3>
+                      {/* Pin only means something for an item already in the library. */}
+                      {savedStatus && (
+                        <button
+                          onClick={() => toggleBump(item.type, item.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-colors hover:cursor-pointer shrink-0 border ${
+                            isBumped
+                              ? 'bg-amber-500 border-amber-500 text-black hover:bg-amber-400'
+                              : 'border-amber-500/60 text-amber-500 hover:bg-amber-500/10'
+                          }`}
+                          title={isBumped ? 'Unpin from the top of your library' : 'Pin to the top of your library'}
+                        >
+                          <ChevronsUp className="w-4 h-4" />
+                          {isBumped ? 'Pinned to top' : 'Pin to top'}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* One state at a time. Clicking the active one removes the item. */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() => toggle(item.type, item.id, "to_watch", item)}
+                        title={savedStatus === "to_watch" ? "Click again to remove from your library" : "Save for later"}
+                        className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2.5 rounded-lg text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
+                          savedStatus === "to_watch"
+                            ? "bg-primary text-white"
+                            : "bg-surface-elevated text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Bookmark className={`w-4 h-4 shrink-0 ${savedStatus === "to_watch" ? "fill-current" : ""}`} />
+                        Saved
+                      </button>
+
+                      <button
+                        onClick={() => toggle(item.type, item.id, "watching", item)}
+                        title={savedStatus === "watching" ? "Click again to remove from your library" : "Mark as in progress"}
+                        className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2.5 rounded-lg text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
+                          savedStatus === "watching"
+                            ? "bg-amber-600 text-white"
+                            : "bg-surface-elevated text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Play className={`w-4 h-4 shrink-0 ${savedStatus === "watching" ? "fill-current" : ""}`} />
+                        In progress
+                      </button>
+
+                      <button
+                        onClick={() => toggle(item.type, item.id, "watched", item)}
+                        title={savedStatus === "watched" ? "Click again to remove from your library" : "Mark as completed"}
+                        className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2.5 rounded-lg text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
+                          savedStatus === "watched"
+                            ? "bg-green-600 text-white"
+                            : "bg-surface-elevated text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <Eye className={`w-4 h-4 shrink-0 ${savedStatus === "watched" ? "fill-current" : ""}`} />
+                        Completed
+                      </button>
+                    </div>
+
+                    {/* Rating - only meaningful once the item is in the library, and it
+                        belongs directly under the status it accompanies. */}
+                    {savedStatus && (
+                      <div className="mt-4">
+                        <RatingStars
+                          value={getUserRating(item.type, item.id)}
+                          onChange={(value) => rate(item.type, item.id, value)}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Primary action - Watch (movies/series) or Read (books). Kept high in
+                      the column and full-width so it's unmissable, while still being a
+                      normal section rather than a floating button row. */}
+                  {item.type === 'book' ? (
+                    <div className="space-y-2">
+                      <a
+                        href={buildLibgenUrl(getTitle())}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg transition-colors font-semibold text-sm sm:text-base hover:cursor-pointer"
+                      >
+                        <BookOpen className="w-5 h-5" />
+                        Read this book
+                      </a>
+                      <a
+                        href={LIBGEN_MIRRORS_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-center text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors hover:cursor-pointer"
+                      >
+                        Or try different mirrors
                       </a>
                     </div>
-                  </div>
-                )}
+                  ) : isLoading ? (
+                    <div className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg bg-surface-elevated text-muted-foreground text-sm sm:text-base">
+                      <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/40 border-t-transparent animate-spin" />
+                      Finding where to watch...
+                    </div>
+                  ) : omdbData?.imdbId ? (
+                    <a
+                      href={`https://www.strem.io/s/${item.type === 'movie' ? 'movie' : 'series'}/${getTitle().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#7B5BF5] hover:bg-[#6344e2] text-white rounded-lg transition-colors font-semibold text-sm sm:text-base hover:cursor-pointer"
+                    >
+                      <MonitorPlay className="w-5 h-5" />
+                      Watch on Stremio
+                    </a>
+                  ) : null}
 
-                {/* Loading state covering everything that isn't already on the card:
-                    trailer, cast, director/creator, runtime, seasons. Title/poster/date/
-                    rating/overview/status-buttons render instantly above regardless. */}
-                {isLoading && (item.type === 'movie' || item.type === 'series') && (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    <span className="ml-3 text-muted-foreground">Loading trailer, cast &amp; more...</span>
-                  </div>
-                )}
-
-                {/* Additional Info */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  {/* Seasons/Episodes for Series */}
-                  {detailedData && 'number_of_seasons' in detailedData && (
+                  {/* Genres/Categories. No entrance delays here - the whole content
+                      block already slides in as one unit, and per-pill stagger made
+                      every carousel step feel like the modal was re-opening. */}
+                  {getGenres().length > 0 && (
                     <div>
-                      <h4 className="text-sm font-semibold text-muted-foreground mb-1">Seasons</h4>
-                      <p className="text-foreground text-sm sm:text-base">
-                        {detailedData.number_of_seasons} seasons, {detailedData.number_of_episodes} episodes
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                        {item.type === 'book' ? 'Categories' : 'Genres'}
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {getGenres().slice(0, 5).map((genre: string, index: number) => (
+                          <span
+                            key={index}
+                            className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium"
+                          >
+                            {genre}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  {getDescription() && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                        {item.type === 'book' ? 'Synopsis' : 'Overview'}
+                      </h3>
+                      <p className="text-foreground leading-relaxed text-sm sm:text-base">
+                        {getDescription()}
                       </p>
                     </div>
                   )}
 
-                  {/* Book specific info */}
-                  {'volumeInfo' in item && item.volumeInfo.pageCount && (
+                  {/* Runtime - moved up under Overview since it's core info, not a footnote */}
+                  {getRuntime() ? (
                     <div>
-                      <h4 className="text-sm font-semibold text-muted-foreground mb-1">Pages</h4>
-                      <p className="text-foreground text-sm sm:text-base">{item.volumeInfo.pageCount}</p>
-                    </div>
-                  )}
-
-                  {'volumeInfo' in item && item.volumeInfo.publisher && (
-                    <div>
-                      <h4 className="text-sm font-semibold text-muted-foreground mb-1">Publisher</h4>
-                      <p className="text-foreground text-sm sm:text-base">{item.volumeInfo.publisher}</p>
-                    </div>
-                  )}
-
-                  {/* Language */}
-                  {('original_language' in item || ('volumeInfo' in item && item.volumeInfo.language)) && (
-                    <div>
-                      <h4 className="text-sm font-semibold text-muted-foreground mb-1">Language</h4>
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                        {item.type === 'movie' ? 'Runtime' : 'Episode Runtime'}
+                      </h3>
                       <p className="text-foreground text-sm sm:text-base">
-                        {'original_language' in item ? (item.original_language as string)?.toUpperCase() :
-                          'volumeInfo' in item ? (item.volumeInfo.language as string)?.toUpperCase() : 'N/A'}
+                        {getRuntime()} minutes
+                      </p>
+                    </div>
+                  ) : isLoading && (item.type === 'movie' || item.type === 'series') ? (
+                    <div className="h-4 w-24 rounded bg-surface-elevated animate-pulse" />
+                  ) : null}
+
+                  {/* Critics scores (Rotten Tomatoes / Metacritic / IMDb) - movies &
+                      Series only, from OMDB (see lib/omdb-helpers.ts). Shows nothing
+                      for books or until omdbData resolves. */}
+                  {(item.type === 'movie' || item.type === 'series') && (
+                    <CriticsScores
+                      rottenTomatoes={omdbData?.rottenTomatoes}
+                      metacritic={omdbData?.metacritic}
+                      imdbRating={omdbData?.imdbRating}
+                    />
+                  )}
+
+                  {/* Trailer - Only for movies and Series. Gated on !isLoading so it
+                      doesn't silently pop in mid-fetch without the shared loading
+                      indicator below having shown first (pre-fetched items skip this,
+                      since isLoading resolves to false almost immediately for them). */}
+                  {!isLoading && (item.type === 'movie' || item.type === 'series') && getYouTubeVideoId() && (
+                    <div id="trailer-section">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                        Trailer
+                      </h3>
+                      <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black shadow-lg">
+                        <iframe
+                          src={`https://www.youtube.com/embed/${getYouTubeVideoId()}?rel=0&modestbranding=1&autoplay=0`}
+                          title={getTrailerTitle()}
+                          className="w-full h-full"
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2 text-center">
+                        Click the play button to watch the trailer
                       </p>
                     </div>
                   )}
+
+                  {/* Cast & Crew - Only for movies and Series */}
+                  {!isLoading && (item.type === 'movie' || item.type === 'series') && getCast().length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                        Cast
+                      </h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                        {getCast().map((actor) => (
+                          <div key={actor.id} className="text-center">
+                            <a 
+                              href={`https://google.com/search?q=${encodeURIComponent(actor.name)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block hover:cursor-pointer"
+                            >
+                              <div className="w-16 h-16 sm:w-20 sm:h-20 relative overflow-hidden rounded-full bg-surface-elevated mx-auto mb-2 hover:scale-105 transition-transform">
+                                {actor.profile_path ? (
+                                  <Image
+                                    src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
+                                    alt={actor.name}
+                                    fill
+                                    quality={65}
+                                    sizes="(max-width: 640px) 64px, 80px"
+                                    // loading="lazy"
+                                    // placeholder="blur"
+                                    // blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
+                                    className="object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <User className="w-6 h-6 text-muted-foreground" />
+                                  </div>
+                                )}
+                              </div>
+                              <p className="text-xs sm:text-sm font-medium text-foreground line-clamp-1 hover:text-primary transition-colors">
+                                {actor.name}
+                              </p>
+                            </a>
+                            <p className="text-xs text-muted-foreground line-clamp-1">
+                              {actor.character}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Director/Creator - Only for movies and Series */}
+                  {!isLoading && (item.type === 'movie' || item.type === 'series') && getDirectorOrCreator() && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                        {item.type === 'movie' ? 'Director' : 'Creator'}
+                      </h3>
+                      <div className="flex items-center gap-3">
+                        <a 
+                          href={`https://google.com/search?q=${encodeURIComponent(getDirectorOrCreator()!.name)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 hover:cursor-pointer"
+                        >
+                          <div className="w-12 h-12 relative overflow-hidden rounded-full bg-surface-elevated hover:scale-105 transition-transform">
+                            {getDirectorOrCreator()!.profile_path ? (
+                              <Image
+                                src={`https://image.tmdb.org/t/p/w185${getDirectorOrCreator()!.profile_path}`}
+                                alt={getDirectorOrCreator()!.name}
+                                fill
+                                quality={65}
+                                sizes="48px"
+                                // loading="lazy"
+                                // placeholder="blur"
+                                // blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjM0EzQTQ0Ii8+Cjwvc3ZnPg=="
+                                className="object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <User className="w-5 h-5 text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-sm sm:text-base font-medium text-foreground hover:text-primary transition-colors">
+                            {getDirectorOrCreator()!.name}
+                          </span>
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Loading state covering everything that isn't already on the card:
+                      trailer, cast, director/creator, runtime, seasons. Title/poster/date/
+                      rating/overview/status-buttons render instantly above regardless. */}
+                  {isLoading && (item.type === 'movie' || item.type === 'series') && (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                      <span className="ml-3 text-muted-foreground">Loading trailer, cast &amp; more...</span>
+                    </div>
+                  )}
+
+                  {/* Additional Info */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                    {/* Seasons/Episodes for Series */}
+                    {detailedData && 'number_of_seasons' in detailedData && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-muted-foreground mb-1">Seasons</h4>
+                        <p className="text-foreground text-sm sm:text-base">
+                          {detailedData.number_of_seasons} seasons, {detailedData.number_of_episodes} episodes
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Book specific info */}
+                    {'volumeInfo' in item && item.volumeInfo.pageCount && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-muted-foreground mb-1">Pages</h4>
+                        <p className="text-foreground text-sm sm:text-base">{item.volumeInfo.pageCount}</p>
+                      </div>
+                    )}
+
+                    {'volumeInfo' in item && item.volumeInfo.publisher && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-muted-foreground mb-1">Publisher</h4>
+                        <p className="text-foreground text-sm sm:text-base">{item.volumeInfo.publisher}</p>
+                      </div>
+                    )}
+
+                    {/* Language */}
+                    {('original_language' in item || ('volumeInfo' in item && item.volumeInfo.language)) && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-muted-foreground mb-1">Language</h4>
+                        <p className="text-foreground text-sm sm:text-base">
+                          {'original_language' in item ? (item.original_language as string)?.toUpperCase() :
+                            'volumeInfo' in item ? (item.volumeInfo.language as string)?.toUpperCase() : 'N/A'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </motion.div>
+                </motion.div>
+              </AnimatePresence>
             </div>
 
             {/* Pager (Feature 3) - a slim bar pinned below the scroll area rather than

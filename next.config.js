@@ -72,7 +72,19 @@ const nextConfig = {
   },
   
   images: {
-    // Image optimization settings
+    // Serve remote images straight from their own CDNs instead of routing them
+    // through Vercel's Image Optimization.
+    //
+    // Every image this app renders is a poster/backdrop/profile shot from TMDB,
+    // Google Books or NYT - already compressed, already on a global CDN, and already
+    // requested at an explicit width (/t/p/w342, /t/p/w185, ...). Optimizing them
+    // again bought us almost nothing, but each distinct source URL x each srcset
+    // width counted as a separate transformation against the Vercel plan quota. With
+    // 1000+ saved items that quota is exhausted quickly, and once it is, any variant
+    // that isn't already cached fails to load - which is why posters went missing in
+    // patches, and worse on mobile (mobile requests different, less-warmed widths).
+    unoptimized: true,
+    // Kept for the (now unused) optimizer path and for any future local images.
     formats: ['image/webp', 'image/avif'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
