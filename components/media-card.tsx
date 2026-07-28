@@ -465,6 +465,7 @@ function MediaCardComponent({ item, className, priority = false, loading = "lazy
             ) : (
               <Link
                 href={getMediaHref(item.type, item.id)}
+                scroll={false}
                 className={cn(
                   "w-10 h-10 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm hover:cursor-pointer",
                   "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
