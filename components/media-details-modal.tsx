@@ -903,7 +903,6 @@ export function MediaDetailsModal({
                       imdbRating={omdbData?.imdbRating}
                       title={getTitle()}
                       imdbId={omdbData?.imdbId}
-                      mediaType={item.type === 'movie' ? 'movie' : 'series'}
                     />
                   )}
 
