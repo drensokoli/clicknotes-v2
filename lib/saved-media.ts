@@ -106,9 +106,16 @@ export interface SavedMediaDoc {
 let indexesEnsured = false
 
 export async function getSavedMediaCollection(): Promise<Collection<SavedMediaDoc> | null> {
-  const client = await clientPromise
-  // lib/mongodb resolves to null when MongoDB is unavailable instead of throwing
-  if (!client) return null
+  // clientPromise (lib/mongodb) rejects rather than resolving to null when MongoDB
+  // is unavailable, so callers that want graceful degradation - like this one, used
+  // during page rendering - catch it themselves instead of relying on a null value.
+  let client
+  try {
+    client = await clientPromise
+  } catch (error) {
+    console.error("MongoDB unavailable:", error)
+    return null
+  }
 
   const collection = client.db(db).collection<SavedMediaDoc>(COLLECTION)
 
