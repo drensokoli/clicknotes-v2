@@ -500,22 +500,96 @@ export function MediaDetailsModal({
             exit="exit"
             className="relative w-full max-w-4xl max-h-[90vh] bg-surface rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
           >
-            {/* Close button - always visible */}
-            <motion.button
-              onClick={closeModal}
-              className="absolute top-4 right-4 z-10 w-10 h-10 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-all duration-200 backdrop-blur-sm hover:cursor-pointer"
-              whileHover={{ scale: 1.1, rotate: 5 }}
-              whileTap={{ scale: 0.9 }}
-              initial={{ opacity: 0, scale: 0, rotate: -90 }}
-              animate={{ opacity: 1, scale: 1, rotate: 0 }}
-              transition={{
-                duration: 0.3,
-                delay: 0.4,
-                ease: "easeOut"
-              }}
-            >
-              <X className="w-5 h-5" />
-            </motion.button>
+            {/* Utility cluster - Share / More / Close. These are chrome, not content
+                actions, so they live in the header instead of competing for space in
+                the action rows below. */}
+            <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
+              {/* Share - native share sheet where available (handleShare), else a
+                  dropdown with per-platform links + copy-link. */}
+              <div className="relative" ref={shareMenuRef}>
+                <button
+                  onClick={handleShare}
+                  title="Share"
+                  aria-label="Share"
+                  className="w-10 h-10 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-sm hover:cursor-pointer"
+                >
+                  <Share2 className="w-[18px] h-[18px]" />
+                </button>
+
+                <AnimatePresence>
+                  {shareMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute top-full mt-2 right-0 w-48 bg-background rounded-xl py-2 z-20 shadow-lg border border-border"
+                    >
+                      <a
+                        href={`https://wa.me/?text=${encodeURIComponent(`${getTitle()} ${getShareUrl()}`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setShareMenuOpen(false)}
+                        className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
+                      >
+                        <MessageCircle className="w-4 h-4 mr-3 text-green-600" />
+                        WhatsApp
+                      </a>
+                      <a
+                        href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getShareUrl())}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setShareMenuOpen(false)}
+                        className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
+                      >
+                        <Facebook className="w-4 h-4 mr-3 text-blue-600" />
+                        Facebook
+                      </a>
+                      <a
+                        href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(getShareUrl())}&text=${encodeURIComponent(getTitle())}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setShareMenuOpen(false)}
+                        className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
+                      >
+                        <Twitter className="w-4 h-4 mr-3 text-sky-500" />
+                        X (Twitter)
+                      </a>
+                      <button
+                        onClick={handleCopyLink}
+                        className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
+                      >
+                        <Link2 className="w-4 h-4 mr-3 text-muted-foreground" />
+                        Copy Link
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* More - the item's canonical page on TMDB / Google Books */}
+              {getExternalLink() && (
+                <a
+                  href={getExternalLink()!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="View on TMDB"
+                  aria-label="View more details externally"
+                  className="w-10 h-10 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-sm hover:cursor-pointer"
+                >
+                  <ExternalLink className="w-[18px] h-[18px]" />
+                </a>
+              )}
+
+              <button
+                onClick={closeModal}
+                title="Close"
+                aria-label="Close"
+                className="w-10 h-10 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-sm hover:cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
             {/* Carousel arrows (Feature 3) - only when the parent wires prev/next.
                 Disabled at the list ends. Sit above the content, edge-centered. */}
@@ -624,240 +698,159 @@ export function MediaDetailsModal({
                 </div>
               </div>
 
-              {/* Action buttons - two rows: your status on this item, then external links */}
-              <div className="flex flex-col items-center gap-3 pt-5 sm:pt-6 px-4">
+              {/* Actions - two coherent groups instead of three mixed rows:
+                    1. Primary: what you can do with this media right now
+                       (Watch / Read / Trailer).
+                    2. Your library: everything describing YOUR relationship to it
+                       (status, rating, bump), bounded in one panel so it reads as a
+                       single unit rather than being scattered between action rows.
+                  Share / More moved to the header utility cluster - they're chrome. */}
+              <div className="flex flex-col items-center gap-4 pt-5 sm:pt-6 px-4 sm:px-6">
 
-                {/* Status row: Save / In Progress / Completed - same wording for
-                    every media type, active state conveyed by color rather than text */}
-                <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
-                  <motion.button
-                    onClick={() => toggle(item.type, item.id, "to_watch", item)}
-                    className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer ${
-                      savedStatus === "to_watch"
-                        ? "bg-blue-800 text-white ring-2 ring-blue-300"
-                        : "bg-primary text-white hover:bg-blue-800"
-                    }`}
-                    variants={buttonVariants}
-                    custom={3}
-                    whileHover="hover"
-                    whileTap="tap"
-                  >
-                    <Bookmark className={`w-4 h-4 ${savedStatus === "to_watch" ? "fill-current" : ""}`} />
-                    <span className="hidden sm:inline">{savedStatus === "to_watch" ? "Saved" : "Save"}</span>
-                  </motion.button>
+                {/* 1. Primary actions */}
+                {(item.type === 'book' || isLoading || omdbData?.imdbId || getTrailerUrl()) && (
+                  <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
+                    {/* Watch on Stremio - Only for movies/TV with IMDB ID */}
+                    {!isLoading && (item.type === 'movie' || item.type === 'series') && omdbData?.imdbId && (
+                      <motion.a
+                        href={`https://www.strem.io/s/${item.type === 'movie' ? 'movie' : 'series'}/${getTitle().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-2.5 bg-[#7B5BF5] hover:bg-[#6344e2] text-white rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
+                        variants={buttonVariants}
+                        custom={0}
+                        whileHover="hover"
+                        whileTap="tap"
+                      >
+                        <MonitorPlay className="w-4 h-4" />
+                        Watch
+                      </motion.a>
+                    )}
 
-                  <motion.button
-                    onClick={() => toggle(item.type, item.id, "watching", item)}
-                    className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer ${
-                      savedStatus === "watching"
-                        ? "bg-amber-700 text-white ring-2 ring-amber-300"
-                        : "bg-amber-600 hover:bg-amber-700 text-white"
-                    }`}
-                    variants={buttonVariants}
-                    custom={4}
-                    whileHover="hover"
-                    whileTap="tap"
-                  >
-                    <Play className={`w-4 h-4 ${savedStatus === "watching" ? "fill-current" : ""}`} />
-                    <span className="hidden sm:inline">In Progress</span>
-                  </motion.button>
+                    {/* Read on Anna's Archive - Only for books */}
+                    {item.type === 'book' && (
+                      <motion.a
+                        href={`https://annas-archive.org/search?q=${encodeURIComponent(getTitle())}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-2.5 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
+                        variants={buttonVariants}
+                        custom={1}
+                        whileHover="hover"
+                        whileTap="tap"
+                      >
+                        <BookOpen className="w-4 h-4" />
+                        Read
+                      </motion.a>
+                    )}
 
-                  <motion.button
-                    onClick={() => toggle(item.type, item.id, "watched", item)}
-                    className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer ${
-                      savedStatus === "watched"
-                        ? "bg-green-700 text-white ring-2 ring-green-300"
-                        : "bg-green-600 hover:bg-green-700 text-white"
-                    }`}
-                    variants={buttonVariants}
-                    custom={5}
-                    whileHover="hover"
-                    whileTap="tap"
-                  >
-                    <Eye className={`w-4 h-4 ${savedStatus === "watched" ? "fill-current" : ""}`} />
-                    <span className="hidden sm:inline">Completed</span>
-                  </motion.button>
-                </div>
+                    {/* Loading placeholder for Watch/Trailer while their data is still
+                        being fetched live (pre-fetched items resolve isLoading to false
+                        almost immediately, so this only shows for the on-demand case) */}
+                    {isLoading && (item.type === 'movie' || item.type === 'series') && (
+                      <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-surface-elevated text-muted-foreground text-sm sm:text-base">
+                        <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/40 border-t-transparent animate-spin" />
+                        Loading
+                      </div>
+                    )}
 
-                {/* Library actions for a saved item: your personal rating (any status -
-                    completing an item also surfaces this via the celebration overlay,
-                    see saved-media-provider.tsx) plus a compact bump-to-top toggle.
-                    Kept to one slim row, distinct from the bigger status/external-link
-                    button rows above/below so it doesn't visually compete with them. */}
-                {savedStatus && (
-                  <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-muted-foreground">Your rating</span>
-                      <RatingStars
-                        value={getUserRating(item.type, item.id)}
-                        onChange={(value) => rate(item.type, item.id, value)}
-                        size={16}
-                      />
-                    </div>
-
-                    <button
-                      onClick={() => toggleBump(item.type, item.id)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors hover:cursor-pointer ${
-                        isBumped
-                          ? "bg-amber-600 text-white"
-                          : "bg-surface-elevated text-muted-foreground hover:text-foreground hover:bg-border"
-                      }`}
-                      title={isBumped ? "Unpin from top of your Library" : "Bump to top of your Library"}
-                    >
-                      <ChevronsUp className="w-3.5 h-3.5" />
-                      {isBumped ? "Pinned to top" : "Bump to top"}
-                    </button>
+                    {/* Watch Trailer - Only for movies/TV */}
+                    {!isLoading && (item.type === 'movie' || item.type === 'series') && getTrailerUrl() && (
+                      <motion.button
+                        onClick={() => {
+                          const trailerSection = document.getElementById('trailer-section')
+                          if (trailerSection) trailerSection.scrollIntoView({ behavior: 'smooth' })
+                        }}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
+                        variants={buttonVariants}
+                        custom={2}
+                        whileHover="hover"
+                        whileTap="tap"
+                        title="Scroll to trailer section"
+                      >
+                        <Play className="w-4 h-4" />
+                        Trailer
+                      </motion.button>
+                    )}
                   </div>
                 )}
 
-                {/* External links row */}
-                <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
-                  {/* Watch on Stremio - Only for movies/TV with IMDB ID */}
-                  {!isLoading && (item.type === 'movie' || item.type === 'series') && omdbData?.imdbId && (
-                    <motion.a
-                      href={`https://www.strem.io/s/${item.type === 'movie' ? 'movie' : 'series'}/${getTitle().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-[#7B5BF5] hover:bg-[#6344e2] text-white rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
-                      variants={buttonVariants}
-                      custom={0}
-                      whileHover="hover"
-                      whileTap="tap"
-                    >
-                      <MonitorPlay className="w-4 h-4" />
-                      <span className="hidden sm:inline">Watch</span>
-                    </motion.a>
-                  )}
-
-                  {/* Read on Anna's Archive - Only for books */}
-                  {item.type === 'book' && (
-                    <motion.a
-                      href={`https://annas-archive.org/search?q=${encodeURIComponent(getTitle())}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
-                      variants={buttonVariants}
-                      custom={1}
-                      whileHover="hover"
-                      whileTap="tap"
-                    >
-                      <BookOpen className="w-4 h-4" />
-                      <span className="hidden sm:inline">Read</span>
-                    </motion.a>
-                  )}
-
-                  {/* Loading placeholder for Watch/Trailer while their data is still being
-                      fetched live (pre-fetched items resolve isLoading to false almost
-                      immediately, so this only shows for the on-demand fallback case) */}
-                  {isLoading && (item.type === 'movie' || item.type === 'series') && (
-                    <div className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-surface-elevated text-muted-foreground text-sm sm:text-base">
-                      <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/40 border-t-transparent animate-spin" />
-                      <span className="hidden sm:inline">Loading</span>
-                    </div>
-                  )}
-
-                  {/* Watch Trailer - Only for movies/TV */}
-                  {!isLoading && (item.type === 'movie' || item.type === 'series') && getTrailerUrl() && (
-                    <motion.button
-                      onClick={() => {
-                        // Scroll to trailer section
-                        const trailerSection = document.getElementById('trailer-section')
-                        if (trailerSection) {
-                          trailerSection.scrollIntoView({ behavior: 'smooth' })
-                        }
-                      }}
-                      className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
-                      variants={buttonVariants}
-                      custom={2}
-                      whileHover="hover"
-                      whileTap="tap"
-                      title="Scroll to trailer section"
-                    >
-                      <Play className="w-4 h-4" />
-                      <span className="hidden sm:inline">View Trailer</span>
-                    </motion.button>
-                  )}
-                  {/* Share - native share sheet where available (handleShare),
-                      else a dropdown with per-platform links + copy-link. */}
-                  <div className="relative" ref={shareMenuRef}>
-                    <motion.button
-                      onClick={handleShare}
-                      className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-surface-elevated hover:bg-border text-foreground rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
-                      variants={buttonVariants}
-                      custom={4}
-                      whileHover="hover"
-                      whileTap="tap"
-                    >
-                      <Share2 className="w-4 h-4" />
-                      <span className="hidden sm:inline">Share</span>
-                    </motion.button>
-
-                    <AnimatePresence>
-                      {shareMenuOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                          transition={{ duration: 0.15 }}
-                          className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-48 bg-background rounded-xl py-2 z-20 shadow-lg border border-border"
-                        >
-                          <a
-                            href={`https://wa.me/?text=${encodeURIComponent(`${getTitle()} ${getShareUrl()}`)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => setShareMenuOpen(false)}
-                            className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
-                          >
-                            <MessageCircle className="w-4 h-4 mr-3 text-green-600" />
-                            WhatsApp
-                          </a>
-                          <a
-                            href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getShareUrl())}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => setShareMenuOpen(false)}
-                            className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
-                          >
-                            <Facebook className="w-4 h-4 mr-3 text-blue-600" />
-                            Facebook
-                          </a>
-                          <a
-                            href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(getShareUrl())}&text=${encodeURIComponent(getTitle())}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => setShareMenuOpen(false)}
-                            className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
-                          >
-                            <Twitter className="w-4 h-4 mr-3 text-sky-500" />
-                            X (Twitter)
-                          </a>
-                          <button
-                            onClick={handleCopyLink}
-                            className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
-                          >
-                            <Link2 className="w-4 h-4 mr-3 text-muted-foreground" />
-                            Copy Link
-                          </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                {/* 2. Your library - status, rating and bump in one bounded panel */}
+                <div className="w-full max-w-xl rounded-xl border border-border/50 bg-surface-elevated/40 p-3 sm:p-4">
+                  <div className="flex items-center justify-between gap-3 mb-2.5">
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      {savedStatus ? 'In your library' : 'Add to your library'}
+                    </h3>
+                    {/* Bump lives here as a quiet secondary toggle - it only means
+                        anything for an item that's already in the library. */}
+                    {savedStatus && (
+                      <button
+                        onClick={() => toggleBump(item.type, item.id)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors hover:cursor-pointer shrink-0 ${
+                          isBumped
+                            ? 'bg-amber-500 text-black'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-surface-elevated'
+                        }`}
+                        title={isBumped ? 'Unpin from the top of your library' : 'Pin to the top of your library'}
+                      >
+                        <ChevronsUp className="w-3.5 h-3.5" />
+                        {isBumped ? 'Pinned' : 'Pin to top'}
+                      </button>
+                    )}
                   </div>
 
-                  {/* More Button */}
-                  {getExternalLink() && (
-                    <motion.a
-                      href={getExternalLink()!}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-gray-600 hover:bg-gray-800 text-white rounded-lg transition-colors text-sm sm:text-base hover:cursor-pointer"
-                      variants={buttonVariants}
-                      custom={5}
-                      whileHover="hover"
-                      whileTap="tap"
+                  {/* Status as a real segmented control - one state at a time, which is
+                      what it actually is. Clicking the active segment removes the item. */}
+                  <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-surface">
+                    <button
+                      onClick={() => toggle(item.type, item.id, "to_watch", item)}
+                      title={savedStatus === "to_watch" ? "Click again to remove from your library" : "Save for later"}
+                      className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-2 py-2 rounded-md text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
+                        savedStatus === "to_watch"
+                          ? "bg-primary text-white shadow-sm"
+                          : "text-muted-foreground hover:text-foreground hover:bg-surface-elevated"
+                      }`}
                     >
-                      <ExternalLink className="w-4 h-4" />
-                      <span className="hidden sm:inline">More</span>
-                    </motion.a>
+                      <Bookmark className={`w-4 h-4 shrink-0 ${savedStatus === "to_watch" ? "fill-current" : ""}`} />
+                      Saved
+                    </button>
+
+                    <button
+                      onClick={() => toggle(item.type, item.id, "watching", item)}
+                      title={savedStatus === "watching" ? "Click again to remove from your library" : "Mark as in progress"}
+                      className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-2 py-2 rounded-md text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
+                        savedStatus === "watching"
+                          ? "bg-amber-600 text-white shadow-sm"
+                          : "text-muted-foreground hover:text-foreground hover:bg-surface-elevated"
+                      }`}
+                    >
+                      <Play className={`w-4 h-4 shrink-0 ${savedStatus === "watching" ? "fill-current" : ""}`} />
+                      In progress
+                    </button>
+
+                    <button
+                      onClick={() => toggle(item.type, item.id, "watched", item)}
+                      title={savedStatus === "watched" ? "Click again to remove from your library" : "Mark as completed"}
+                      className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-2 py-2 rounded-md text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
+                        savedStatus === "watched"
+                          ? "bg-green-600 text-white shadow-sm"
+                          : "text-muted-foreground hover:text-foreground hover:bg-surface-elevated"
+                      }`}
+                    >
+                      <Eye className={`w-4 h-4 shrink-0 ${savedStatus === "watched" ? "fill-current" : ""}`} />
+                      Completed
+                    </button>
+                  </div>
+
+                  {/* Rating - only meaningful once the item is in the library, and it
+                      sits directly under the status it belongs with. */}
+                  {savedStatus && (
+                    <div className="mt-3 pt-3 border-t border-border/50">
+                      <RatingStars
+                        value={getUserRating(item.type, item.id)}
+                        onChange={(value) => rate(item.type, item.id, value)}
+                      />
+                    </div>
                   )}
                 </div>
               </div>

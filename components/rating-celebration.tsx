@@ -104,7 +104,7 @@ export function RatingCelebration({ title, poster, value, onRate, onClose }: Rat
         <p className="text-sm text-muted-foreground mb-5">How would you rate it?</p>
 
         <div className="flex justify-center mb-5">
-          <RatingStars value={picked} onChange={handlePick} size={24} />
+          <RatingStars value={picked} onChange={handlePick} size="large" />
         </div>
 
         <button
