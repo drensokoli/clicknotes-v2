@@ -210,7 +210,14 @@ export function MediaDetailsModal({
             // treating those as complete permanently hid the Watch/Trailer
             // buttons and embed for them.
             const hasFullDetails = 'details' in item && item.details && typeof item.details === 'object' && 'videos' in item.details
-            const existingOmdbData = 'omdbData' in item ? item.omdbData : undefined
+            // Same "stub data" problem as details above: cards saved/populated before
+            // RT/Metacritic/imdbRating parsing was added to lib/omdb-helpers.ts carry
+            // an older-shape omdbData (just imdbId/rated/runtime/awards). Treating that
+            // as complete would permanently hide the critics-scores section for every
+            // item saved before that change - `imdbRating` is the field that signals
+            // the newer parsing actually ran, so its absence means "stale, re-fetch."
+            const cachedOmdbData = 'omdbData' in item ? item.omdbData : undefined
+            const existingOmdbData = cachedOmdbData && 'imdbRating' in cachedOmdbData ? cachedOmdbData : undefined
 
             if (hasFullDetails) {
               setDetailedData(item.details as MovieDetails | TVDetails);
@@ -896,6 +903,7 @@ export function MediaDetailsModal({
                       imdbRating={omdbData?.imdbRating}
                       title={getTitle()}
                       imdbId={omdbData?.imdbId}
+                      mediaType={item.type === 'movie' ? 'movie' : 'series'}
                     />
                   )}
 

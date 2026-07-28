@@ -10,6 +10,36 @@ interface CriticsScoresProps {
   // For constructing clickable links to the respective sites
   title?: string
   imdbId?: string
+  mediaType?: "movie" | "series"
+}
+
+// Rotten Tomatoes and Metacritic both slug their title-page URLs as a plain
+// transliteration of the title (lowercase, punctuation stripped, words joined by a
+// separator) rather than exposing any lookup API - e.g. "Minority Report" ->
+// rottentomatoes.com/m/minority_report, metacritic.com/movie/minority-report. This
+// reproduces that convention; verified against ~10 real titles (with articles,
+// apostrophes, colons, numbers) before relying on it. It's a best-effort guess, not
+// a resolved ID, so a rare title (unusual foreign titles, or two releases sharing a
+// name where the site appends a year) can still 404 - there's no ID-based lookup
+// either site exposes for a plain-text query to be verified against beforehand.
+function slugify(title: string, separator: "_" | "-"): string {
+  const slug = title
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // strip accents so e.g. "café" -> "cafe"
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, separator)
+    .replace(new RegExp(`^\\${separator}+|\\${separator}+$`, "g"), "")
+  return slug
+}
+
+function buildRottenTomatoesUrl(title: string, mediaType: "movie" | "series"): string {
+  const section = mediaType === "movie" ? "m" : "tv"
+  return `https://www.rottentomatoes.com/${section}/${slugify(title, "_")}`
+}
+
+function buildMetacriticUrl(title: string, mediaType: "movie" | "series"): string {
+  const section = mediaType === "movie" ? "movie" : "tv"
+  return `https://www.metacritic.com/${section}/${slugify(title, "-")}/`
 }
 
 // Fresh (>=60%) shows a red tomato; rotten (<60%) shows a green splat - the two
@@ -43,15 +73,15 @@ function metacriticColor(score: number): string {
   return "#ff6874"
 }
 
-export function CriticsScores({ rottenTomatoes, metacritic, imdbRating, title, imdbId }: CriticsScoresProps) {
+export function CriticsScores({ rottenTomatoes, metacritic, imdbRating, title, imdbId, mediaType }: CriticsScoresProps) {
   if (!rottenTomatoes && !metacritic && !imdbRating) return null
 
   const rtNumber = rottenTomatoes ? parseInt(rottenTomatoes, 10) : null
   const metaNumber = metacritic ? parseInt(metacritic, 10) : null
 
-  // Build links to the respective sites
-  const rtUrl = title ? `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}` : null
-  const metaUrl = title ? `https://www.metacritic.com/search?search=${encodeURIComponent(title)}` : null
+  // Direct title-page links (see slugify above), not site search results.
+  const rtUrl = title && mediaType ? buildRottenTomatoesUrl(title, mediaType) : null
+  const metaUrl = title && mediaType ? buildMetacriticUrl(title, mediaType) : null
   const imdbUrl = imdbId ? `https://www.imdb.com/title/${imdbId}` : null
 
   return (
