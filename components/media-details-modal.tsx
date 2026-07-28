@@ -1,8 +1,10 @@
 "use client"
 
-import { X, Star, Calendar, ExternalLink, Play, Eye, Bookmark, User, MonitorPlay, BookOpen, Share2, Facebook, Twitter, MessageCircle, Link2 } from "lucide-react"
-import { getOmdbData } from "@/lib/omdb-helpers"
+import { X, Star, Calendar, ExternalLink, Play, Eye, Bookmark, User, MonitorPlay, BookOpen, Share2, Facebook, Twitter, MessageCircle, Link2, ChevronsUp, ChevronLeft, ChevronRight } from "lucide-react"
+import { getOmdbData, type OmdbData } from "@/lib/omdb-helpers"
 import Image from "next/image"
+import { CriticsScores } from "./critics-scores"
+import { RatingStars } from "./rating-stars"
 import type { MediaItem } from "./media-card"
 import { useSavedMedia } from "./saved-media-provider"
 import { useEffect, useRef, useState } from "react"
@@ -18,6 +20,13 @@ interface MediaDetailsModalProps {
   onClose: () => void
   tmdbApiKey: string
   omdbApiKeys: string[]
+  // Optional carousel navigation through a list (used by the Library - Feature 3).
+  // When provided, prev/next arrows, ← / → keys, and horizontal swipe move between
+  // items. Omitted by the route-based modal, which shows a single item.
+  onPrev?: () => void
+  onNext?: () => void
+  hasPrev?: boolean
+  hasNext?: boolean
 }
 
 export function MediaDetailsModal({
@@ -26,13 +35,19 @@ export function MediaDetailsModal({
   onClose: closeModal,
   tmdbApiKey,
   omdbApiKeys,
+  onPrev,
+  onNext,
+  hasPrev = false,
+  hasNext = false,
 }: MediaDetailsModalProps) {
-  const { getStatus, toggle } = useSavedMedia()
+  const { getStatus, toggle, getRating: getUserRating, rate, getBump, toggleBump } = useSavedMedia()
   const [detailedData, setDetailedData] = useState<MovieDetails | TVDetails | null>(null)
-  const [omdbData, setOmdbData] = useState<{ imdbId: string } | null>(null)
+  const [omdbData, setOmdbData] = useState<OmdbData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [shareMenuOpen, setShareMenuOpen] = useState(false)
   const shareMenuRef = useRef<HTMLDivElement>(null)
+  // Tracks the start of a horizontal swipe for carousel navigation (Feature 3).
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
 
   // Close the share menu on an outside click, same pattern as the user menu
   // (components/user-profile.tsx).
@@ -234,10 +249,30 @@ export function MediaDetailsModal({
     }
   }, [isModalOpen, closeModal])
 
+  // Arrow-key carousel navigation (Feature 3) - only active when the parent passed
+  // prev/next handlers (i.e. the Library's in-place browser). Left/right respect the
+  // list bounds via hasPrev/hasNext.
+  useEffect(() => {
+    if (!isModalOpen || (!onPrev && !onNext)) return
+    const handleArrows = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft' && hasPrev && onPrev) onPrev()
+      else if (e.key === 'ArrowRight' && hasNext && onNext) onNext()
+    }
+    document.addEventListener('keydown', handleArrows)
+    return () => document.removeEventListener('keydown', handleArrows)
+  }, [isModalOpen, onPrev, onNext, hasPrev, hasNext])
+
   if (!isModalOpen || !item) return null
 
   // Current saved state for this item ("to_watch" | "watched" | null)
   const savedStatus = getStatus(item.type, item.id)
+  // Whether the item is bumped (pinned to the top of the Library). Only meaningful
+  // for saved items - the button is shown alongside the status buttons below.
+  const isBumped = getBump(item.type, item.id) !== null
+
+  // Search/discover results carry no credits or runtime; the save API enriches
+  // movies/series from TMDB at save time (lib/save-enrichment.ts), so the card
+  // itself is passed through as-is here - no client-side credit merging needed.
 
   const getTitle = () => {
     if ('title' in item && item.title) return item.title
@@ -417,6 +452,28 @@ export function MediaDetailsModal({
     })
   }
 
+  // Horizontal-swipe carousel navigation (Feature 3), mobile-friendly counterpart to
+  // the arrow buttons / keys. Requires a clearly horizontal gesture so it doesn't
+  // fight the modal's vertical scroll.
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0]
+    touchStartRef.current = { x: t.clientX, y: t.clientY }
+  }
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStartRef.current
+    touchStartRef.current = null
+    if (!start || (!onPrev && !onNext)) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return
+    if (dx < 0 && hasNext && onNext) onNext()
+    else if (dx > 0 && hasPrev && onPrev) onPrev()
+  }
+
+  const showNav = Boolean(onPrev || onNext)
+
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       {/* Backdrop */}
@@ -460,8 +517,31 @@ export function MediaDetailsModal({
               <X className="w-5 h-5" />
             </motion.button>
 
+            {/* Carousel arrows (Feature 3) - only when the parent wires prev/next.
+                Disabled at the list ends. Sit above the content, edge-centered. */}
+            {showNav && (
+              <>
+                <button
+                  onClick={onPrev}
+                  disabled={!hasPrev}
+                  aria-label="Previous item"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center backdrop-blur-sm transition-all hover:bg-black/70 disabled:opacity-30 disabled:cursor-default hover:cursor-pointer"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={onNext}
+                  disabled={!hasNext}
+                  aria-label="Next item"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center backdrop-blur-sm transition-all hover:bg-black/70 disabled:opacity-30 disabled:cursor-default hover:cursor-pointer"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
+
             {/* Scrollable content */}
-            <div className="max-h-[90vh] overflow-y-auto">
+            <div className="max-h-[90vh] overflow-y-auto" onTouchStart={showNav ? handleTouchStart : undefined} onTouchEnd={showNav ? handleTouchEnd : undefined}>
               {/* Header with backdrop */}
               <div className="relative h-48 sm:h-64 md:h-80 overflow-hidden">
                 {getBackdropUrl() ? (
@@ -598,6 +678,38 @@ export function MediaDetailsModal({
                     <span className="hidden sm:inline">Completed</span>
                   </motion.button>
                 </div>
+
+                {/* Library actions for a saved item: bump-to-top, plus the personal
+                    rating (any status). Rating is independent of status; completing an
+                    item also surfaces it via the celebration overlay (saved-media-provider). */}
+                {savedStatus && (
+                  <div className="flex flex-col items-center gap-3 pt-1">
+                    <motion.button
+                      onClick={() => toggleBump(item.type, item.id)}
+                      className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer ${
+                        isBumped
+                          ? "bg-amber-600 text-white ring-2 ring-amber-300"
+                          : "bg-surface-elevated text-foreground hover:bg-border"
+                      }`}
+                      whileHover={{ scale: 1.05, y: -2 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <ChevronsUp className="w-4 h-4" />
+                      <span>{isBumped ? "Pinned to top" : "Bump to top"}</span>
+                    </motion.button>
+
+                    <div className="flex flex-col items-center gap-1.5">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Your rating
+                      </span>
+                      <RatingStars
+                        value={getUserRating(item.type, item.id)}
+                        onChange={(value) => rate(item.type, item.id, value)}
+                        size={20}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* External links row */}
                 <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
@@ -813,6 +925,17 @@ export function MediaDetailsModal({
                 ) : isLoading && (item.type === 'movie' || item.type === 'series') ? (
                   <div className="h-4 w-24 rounded bg-surface-elevated animate-pulse" />
                 ) : null}
+
+                {/* Critics scores (Rotten Tomatoes / Metacritic / IMDb) - movies &
+                    Series only, from OMDB (see lib/omdb-helpers.ts). Shows nothing
+                    for books or until omdbData resolves. */}
+                {(item.type === 'movie' || item.type === 'series') && (
+                  <CriticsScores
+                    rottenTomatoes={omdbData?.rottenTomatoes}
+                    metacritic={omdbData?.metacritic}
+                    imdbRating={omdbData?.imdbRating}
+                  />
+                )}
 
                 {/* Trailer - Only for movies and Series. Gated on !isLoading so it
                     doesn't silently pop in mid-fetch without the shared loading

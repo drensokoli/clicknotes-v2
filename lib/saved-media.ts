@@ -57,9 +57,22 @@ export interface SavedCard {
     tagline?: string
     type?: string
     videos?: { results: Array<{ key: string; name: string; site: string; type: string; official: boolean }> }
+    // Present on Popular/Redis cards (population embeds a trimmed credits list) and on
+    // items enriched at save time (lib/save-enrichment.ts) or by the detail modal's
+    // live fetch. Used to derive the searchable `people` list below, and rendered by
+    // the modal's Cast / Director sections for these enriched saves.
+    credits?: {
+      cast?: Array<{ id: number; name: string; character?: string; profile_path: string | null }>
+      crew?: Array<{ id: number; name: string; job?: string; profile_path: string | null }>
+    }
+    created_by?: Array<{ id: number; name: string; profile_path: string | null }>
   }
-  omdbData?: { imdbId: string; rated: string; runtime: string; awards: string }
+  omdbData?: { imdbId: string; rated: string; runtime: string; awards: string; rottenTomatoes?: string; metacritic?: string; imdbRating?: string }
   stremioLink?: string
+  // Lowercased searchable names (cast + director/creator + writers) so the Library
+  // search matches on people, not just the title. Derived in toSlimCard from the
+  // card's embedded credits; absent for books (their authors live in volumeInfo).
+  people?: string[]
   // book
   volumeInfo?: {
     title?: string
@@ -79,6 +92,13 @@ export interface SavedMediaDoc {
   mediaId: string
   status: SavedStatus
   card: SavedCard
+  // The user's own 1-10 rating for this item, if they've rated it. Independent of
+  // status - an item can be rated at any status (see setRating below).
+  rating?: number
+  // When set, the item is "bumped" - pinned to the top of the Library view so the
+  // user can queue up what to watch/read next. The timestamp orders multiple bumped
+  // items (most-recently-bumped first). See setBump below.
+  bumpedAt?: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -108,6 +128,28 @@ export async function getSavedMediaCollection(): Promise<Collection<SavedMediaDo
 // already trimmed down (see optimizeMovieData/optimizeSeriesData), preserved as-is if
 // the incoming card carries it (e.g. saved straight from a browsing card that already
 // has it embedded).
+// Crew jobs whose names are worth searching by (the "writers etc." the Library
+// search should match, alongside cast and the director/creator).
+const SEARCHABLE_CREW_JOBS = new Set(["Director", "Writer", "Screenplay", "Story"])
+
+// Build the lowercased searchable name list from whatever credits the incoming
+// card carries. Popular/Redis cards embed a trimmed credits list; search-result
+// cards carry none (until the modal enriches them - see media-details-modal.tsx),
+// so this is best-effort and just returns undefined when there's nothing to index.
+function derivePeople(card: SavedCard): string[] | undefined {
+  const names = new Set<string>()
+  for (const person of card.details?.credits?.cast ?? []) {
+    if (person.name) names.add(person.name.toLowerCase())
+  }
+  for (const person of card.details?.credits?.crew ?? []) {
+    if (person.name && person.job && SEARCHABLE_CREW_JOBS.has(person.job)) names.add(person.name.toLowerCase())
+  }
+  for (const person of card.details?.created_by ?? []) {
+    if (person.name) names.add(person.name.toLowerCase())
+  }
+  return names.size > 0 ? Array.from(names) : undefined
+}
+
 export function toSlimCard(mediaType: MediaType, card: SavedCard): SavedCard {
   if (mediaType === "movie") {
     return {
@@ -123,6 +165,7 @@ export function toSlimCard(mediaType: MediaType, card: SavedCard): SavedCard {
       details: card.details,
       omdbData: card.omdbData,
       stremioLink: card.stremioLink,
+      people: derivePeople(card) ?? card.people,
     }
   }
 
@@ -140,6 +183,7 @@ export function toSlimCard(mediaType: MediaType, card: SavedCard): SavedCard {
       details: card.details,
       omdbData: card.omdbData,
       stremioLink: card.stremioLink,
+      people: derivePeople(card) ?? card.people,
     }
   }
 
@@ -227,8 +271,76 @@ export async function toggleStatus(
 
   // $set mediaType too, so a legacy "tvshow" doc self-heals to "series" the next
   // time its status changes, even before the migration script runs.
+  const slimCard = toSlimCard(mediaType, card)
+  // Don't let a status change from a credits-less card (e.g. a search-result grid
+  // card) wipe searchable people we'd already indexed from a richer save.
+  if (!slimCard.people && existing.card.people) slimCard.people = existing.card.people
   await collection.updateOne(key, {
-    $set: { mediaType, status, card: toSlimCard(mediaType, card), updatedAt: new Date() },
+    $set: { mediaType, status, card: slimCard, updatedAt: new Date() },
   })
   return status
+}
+
+// Set (or clear, with rating === null) the user's personal 1-10 rating for an
+// item they've saved. Rating is only meaningful on a saved item, so this is a
+// no-op returning null when no doc exists - callers should have saved it first.
+export async function setRating(
+  userId: string,
+  mediaType: MediaType,
+  mediaId: string,
+  rating: number | null,
+): Promise<number | null> {
+  const collection = await getSavedMediaCollection()
+  if (!collection) throw new Error("Database unavailable")
+
+  const legacyTypes = mediaType === "series" ? ["series", "tvshow"] : [mediaType]
+  const existing = await collection.findOne({
+    userId,
+    mediaId,
+    mediaType: { $in: legacyTypes },
+  } as Record<string, unknown>)
+  if (!existing) return null
+
+  const key = { userId, mediaId, mediaType: existing.mediaType }
+
+  if (rating === null) {
+    // $set mediaType too, self-healing a legacy "tvshow" doc like toggleStatus does.
+    await collection.updateOne(key, { $unset: { rating: "" }, $set: { mediaType, updatedAt: new Date() } })
+    return null
+  }
+
+  await collection.updateOne(key, { $set: { rating, mediaType, updatedAt: new Date() } })
+  return rating
+}
+
+// Bump (pin to top, with the current time) or un-bump a saved item. Like setRating,
+// this is a no-op returning null when the item isn't saved. Returns the new bumpedAt
+// timestamp, or null when cleared.
+export async function setBump(
+  userId: string,
+  mediaType: MediaType,
+  mediaId: string,
+  bumped: boolean,
+): Promise<Date | null> {
+  const collection = await getSavedMediaCollection()
+  if (!collection) throw new Error("Database unavailable")
+
+  const legacyTypes = mediaType === "series" ? ["series", "tvshow"] : [mediaType]
+  const existing = await collection.findOne({
+    userId,
+    mediaId,
+    mediaType: { $in: legacyTypes },
+  } as Record<string, unknown>)
+  if (!existing) return null
+
+  const key = { userId, mediaId, mediaType: existing.mediaType }
+
+  if (!bumped) {
+    await collection.updateOne(key, { $unset: { bumpedAt: "" }, $set: { mediaType, updatedAt: new Date() } })
+    return null
+  }
+
+  const bumpedAt = new Date()
+  await collection.updateOne(key, { $set: { bumpedAt, mediaType, updatedAt: new Date() } })
+  return bumpedAt
 }

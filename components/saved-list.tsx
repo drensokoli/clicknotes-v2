@@ -7,6 +7,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Shuffle as ShuffleIcon, ArrowDownUp, ArrowUp, ArrowDown, ChevronDown } from "lucide-react"
 import { useSavedMedia, type MediaType, type SavedStatus } from "./saved-media-provider"
 import { MediaCard, type MediaItem } from "./media-card"
+import { MediaDetailsModal } from "./media-details-modal"
 import { ShuffleModal } from "./shuffle-modal"
 import { UserProfile } from "./user-profile"
 import { LibraryFilters } from "./library-filters"
@@ -26,7 +27,7 @@ import {
   type SavedItem,
   type SortField,
   type SortDir,
-  getTitle,
+  getSearchText,
   computeAvailableGenres,
   computeAvailableEras,
   matchesGenres,
@@ -43,6 +44,10 @@ import {
 
 interface SavedListProps {
   items: SavedItem[]
+  // Keys for the in-place detail modal (Feature 3); the modal fetches any missing
+  // details/OMDB live in the browser, same as the route-based modal already does.
+  tmdbApiKey: string
+  omdbApiKeys: string[]
 }
 
 // Homepage sections are addressed via URL hash (see components/client-navigation.tsx),
@@ -69,8 +74,8 @@ const SLUG_TO_STATUS: Record<string, SavedStatus> = {
   completed: "watched",
 }
 
-export function SavedList({ items }: SavedListProps) {
-  const { getStatus, isLoaded } = useSavedMedia()
+export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
+  const { getStatus, getBump, isLoaded } = useSavedMedia()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -113,6 +118,8 @@ export function SavedList({ items }: SavedListProps) {
   })
   const [searchQuery, setSearchQuery] = useState("")
   const [shuffleOpen, setShuffleOpen] = useState(false)
+  // Index into visibleItems for the in-place detail modal (Feature 3); null = closed.
+  const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const gridScrollRef = useRef<HTMLDivElement>(null)
   useSlashFocus(searchInputRef)
@@ -176,9 +183,26 @@ export function SavedList({ items }: SavedListProps) {
   const statusMatchedItems = filteredItems.filter((item) => effectiveStatus(item) === activeTab)
   const query = searchQuery.trim().toLowerCase()
   const searchedItems = query
-    ? statusMatchedItems.filter((item) => getTitle(item).toLowerCase().includes(query))
+    ? statusMatchedItems.filter((item) => getSearchText(item).includes(query))
     : statusMatchedItems
-  const visibleItems = sortItems(searchedItems, sortField, sortDir)
+  const sortedItems = sortItems(searchedItems, sortField, sortDir)
+
+  // Bumped (pinned) items float to the top of whatever sort is active, most-recently
+  // bumped first - so "watch this next" always sits above the rest of the list.
+  // Follows live provider state once loaded (so bumping reorders instantly), else the
+  // server snapshot on card.bumpedAt via SavedItem.bumpedAt.
+  const bumpTime = (item: SavedItem): number | null => {
+    const iso = isLoaded ? getBump(item.mediaType, item.mediaId) : item.bumpedAt ?? null
+    if (!iso) return null
+    const t = Date.parse(iso)
+    return Number.isFinite(t) ? t : null
+  }
+  const bumpedItems = sortedItems
+    .filter((item) => bumpTime(item) !== null)
+    .sort((a, b) => (bumpTime(b) as number) - (bumpTime(a) as number))
+  const unbumpedItems = sortedItems.filter((item) => bumpTime(item) === null)
+  const visibleItems = [...bumpedItems, ...unbumpedItems]
+
   const totalCount = filteredItems.filter((item) => effectiveStatus(item) !== null).length
   const currentSortOption = SORT_FIELD_OPTIONS.find((o) => o.key === sortField)
 
@@ -236,7 +260,7 @@ export function SavedList({ items }: SavedListProps) {
               <input
                 ref={searchInputRef}
                 type="text"
-                placeholder="Search your library..."
+                placeholder="Search by title, cast, director..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-10 w-full pl-10 pr-9 rounded-lg text-sm focus:outline-none border border-border/40 bg-surface-elevated focus:ring-2 focus:ring-primary/50"
@@ -341,10 +365,11 @@ export function SavedList({ items }: SavedListProps) {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6 md:gap-8">
-                  {visibleItems.map((item) => (
+                  {visibleItems.map((item, index) => (
                     <MediaCard
                       key={`${item.mediaType}:${item.mediaId}`}
                       item={item.card as unknown as MediaItem}
+                      onOpenInfo={() => setActiveIndex(index)}
                     />
                   ))}
                 </div>
@@ -353,6 +378,24 @@ export function SavedList({ items }: SavedListProps) {
           </div>
         </main>
       </div>
+
+      {/* In-place detail modal with prev/next through the current filtered+sorted
+          list (Feature 3). activeIndex is an index into visibleItems, so navigation
+          honors whatever filtering/sorting/bumping is applied. */}
+      {activeIndex !== null && visibleItems[activeIndex] && (
+        <MediaDetailsModal
+          key={`${visibleItems[activeIndex].mediaType}:${visibleItems[activeIndex].mediaId}`}
+          item={visibleItems[activeIndex].card as unknown as MediaItem}
+          isOpen
+          onClose={() => setActiveIndex(null)}
+          tmdbApiKey={tmdbApiKey}
+          omdbApiKeys={omdbApiKeys}
+          hasPrev={activeIndex > 0}
+          hasNext={activeIndex < visibleItems.length - 1}
+          onPrev={() => setActiveIndex((i) => (i !== null && i > 0 ? i - 1 : i))}
+          onNext={() => setActiveIndex((i) => (i !== null && i < visibleItems.length - 1 ? i + 1 : i))}
+        />
+      )}
 
       {shuffleOpen && (
         <ShuffleModal

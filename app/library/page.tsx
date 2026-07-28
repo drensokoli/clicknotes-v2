@@ -25,9 +25,21 @@ export default async function LibraryPage() {
     mediaType: d.mediaType,
     mediaId: d.mediaId,
     status: d.status,
+    rating: d.rating ?? null,
+    bumpedAt: d.bumpedAt ? d.bumpedAt.toISOString() : null,
     card: d.card,
     savedAt: d.createdAt.toISOString(),
   }))
 
-  return <SavedList items={items} />
+  // Keys for the Library's in-place detail modal (Feature 3) - the modal fetches
+  // any missing details/OMDB live in the browser, same as the route-based modal
+  // (components/media-modal-route.tsx) already passes these to the client.
+  const tmdbApiKey = process.env.TMDB_API_KEY || ""
+  const omdbApiKeys = [
+    process.env.OMDB_API_KEY_1 || "",
+    process.env.OMDB_API_KEY_2 || "",
+    process.env.OMDB_API_KEY_3 || "",
+  ]
+
+  return <SavedList items={items} tmdbApiKey={tmdbApiKey} omdbApiKeys={omdbApiKeys} />
 }

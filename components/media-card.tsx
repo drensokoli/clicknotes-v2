@@ -1,6 +1,6 @@
 import Image from "next/image"
 import Link from "next/link"
-import { Star } from "lucide-react"
+import { Star, ChevronsUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getMediaHref } from "@/lib/media-url"
 import { useSavedMedia } from "./saved-media-provider"
@@ -63,6 +63,9 @@ export interface Movie {
     rated: string
     runtime: string
     awards: string
+    rottenTomatoes?: string
+    metacritic?: string
+    imdbRating?: string
   }
   stremioLink?: string
 }
@@ -129,6 +132,9 @@ export interface Series {
     rated: string
     runtime: string
     awards: string
+    rottenTomatoes?: string
+    metacritic?: string
+    imdbRating?: string
   }
   stremioLink?: string
 }
@@ -171,10 +177,15 @@ interface MediaCardProps {
   className?: string
   priority?: boolean
   loading?: "lazy" | "eager"
+  // When provided (the Library grid - Feature 3), the Info control opens an in-place
+  // carousel modal via this callback instead of navigating to the item's route, so
+  // the user can page prev/next through the current list. Omitted elsewhere, where
+  // Info stays a real Link into the @modal route.
+  onOpenInfo?: () => void
 }
 
-function MediaCardComponent({ item, className, priority = false, loading = "lazy" }: MediaCardProps) {
-  const { getStatus, toggle } = useSavedMedia()
+function MediaCardComponent({ item, className, priority = false, loading = "lazy", onOpenInfo }: MediaCardProps) {
+  const { getStatus, toggle, getRating: getUserRating, getBump, toggleBump } = useSavedMedia()
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   // Explicit JS-driven reveal, distinct from desktop's CSS :hover reveal. Needed because
@@ -269,6 +280,10 @@ function MediaCardComponent({ item, className, priority = false, loading = "lazy
 
   // Current saved state for this item ("to_watch" | "watching" | "watched" | null)
   const savedStatus = getStatus(item.type, item.id);
+  // The user's own 1-10 rating, shown as a badge when set (mostly relevant in the Library).
+  const userRating = getUserRating(item.type, item.id);
+  // Whether this item is bumped (pinned to the top of the Library).
+  const isBumped = getBump(item.type, item.id) !== null;
 
   return (
     <div
@@ -340,6 +355,34 @@ function MediaCardComponent({ item, className, priority = false, loading = "lazy
           showButtons && "pointer-events-auto",
         )}>
           <div className="flex flex-col space-y-2">
+            {/* Bump Button - pins the item to the top of the Library ("watch next").
+                Only shown for saved items (bumping an unsaved item is a no-op).
+                Colored amber when active. */}
+            {savedStatus && (
+              <button
+                className={cn(
+                  "w-10 h-10 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm hover:cursor-pointer",
+                  "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
+                  "button-slide-up delay-1 media-card-button",
+                )}
+                style={
+                  isBumped
+                    ? { backgroundColor: "rgb(217, 119, 6)", color: "rgb(255, 255, 255)" }
+                    : {
+                        backgroundColor: mounted && resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                        color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
+                      }
+                }
+                title={isBumped ? "Unpin from top" : "Bump to top"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleBump(item.type, item.id);
+                }}
+              >
+                <ChevronsUp className="w-4 h-4" />
+              </button>
+            )}
+
             {/* Save Button */}
             <button
               className={cn(
@@ -418,31 +461,54 @@ function MediaCardComponent({ item, className, priority = false, loading = "lazy
               </svg>
             </button>
 
-            {/* Info Button - the only way to open the detail modal. A real Link
-                to the item's canonical URL rather than a JS-only click handler:
-                Next intercepts this navigation into the @modal parallel route
-                (see app/@modal/(.)movie/[id]/page.tsx) when clicked from within
-                the app, showing it as an overlay without unmounting whatever's
-                underneath - and it still works as a plain link (new tab,
-                keyboard, crawlers) since it's a real <a href>. */}
-            <Link
-              href={getMediaHref(item.type, item.id)}
-              className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm hover:cursor-pointer",
-                "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
-                "button-slide-up delay-4 media-card-button",
-              )}
-              style={{
-                backgroundColor: mounted && resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
-                color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
-              }}
-              title="View Details"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </Link>
+            {/* Info Button - opens the detail modal. In the Library (onOpenInfo set)
+                it opens an in-place carousel modal so the user can page prev/next
+                through the current list (Feature 3). Everywhere else it's a real Link
+                Next intercepts into the @modal parallel route (see
+                app/@modal/(.)movie/[id]/page.tsx), which still works as a plain link
+                (new tab, keyboard, crawlers) since it's a real <a href>. */}
+            {onOpenInfo ? (
+              <button
+                type="button"
+                className={cn(
+                  "w-10 h-10 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm hover:cursor-pointer",
+                  "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
+                  "button-slide-up delay-4 media-card-button",
+                )}
+                style={{
+                  backgroundColor: mounted && resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                  color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
+                }}
+                title="View Details"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenInfo();
+                }}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+            ) : (
+              <Link
+                href={getMediaHref(item.type, item.id)}
+                className={cn(
+                  "w-10 h-10 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm hover:cursor-pointer",
+                  "bg-white/80 text-gray-800 dark:bg-gray-800/80 dark:text-gray-200",
+                  "button-slide-up delay-4 media-card-button",
+                )}
+                style={{
+                  backgroundColor: mounted && resolvedTheme === 'dark' ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+                  color: mounted && resolvedTheme === 'dark' ? 'rgb(229, 231, 235)' : 'rgb(31, 41, 39)'
+                }}
+                title="View Details"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -468,6 +534,25 @@ function MediaCardComponent({ item, className, priority = false, loading = "lazy
           <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
           <span>{getRating() > 0 ? getRating().toFixed(1) : 'N/A'}</span>
         </div>
+
+        {/* Top-left badge column: pinned indicator (when bumped) above the user's own
+            rating (when set). Both purely decorative / pointer-events-none. */}
+        {(isBumped || userRating !== null) && (
+          <div className="absolute top-3 left-3 flex flex-col items-start gap-1.5 z-10 pointer-events-none">
+            {isBumped && (
+              <div className="flex items-center gap-1 rounded-full bg-amber-600/90 backdrop-blur-sm px-2.5 py-1.5 text-xs font-semibold text-white shadow-lg">
+                <ChevronsUp className="h-3.5 w-3.5" />
+                <span>Next</span>
+              </div>
+            )}
+            {userRating !== null && (
+              <div className="flex items-center gap-1.5 rounded-full bg-amber-500/90 backdrop-blur-sm px-2.5 py-1.5 text-xs font-semibold text-black shadow-lg">
+                <Star className="h-3.5 w-3.5 fill-black text-black" />
+                <span>{userRating}</span>
+              </div>
+            )}
+          </div>
+        )}
 
 
       </div>

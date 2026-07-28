@@ -25,11 +25,16 @@ export async function GET(request: NextRequest) {
 
     // Default response is lightweight keys (for hydrating button state); include the
     // full slim card only when explicitly requested (used to render the Library page).
-    const items = docs.map((d) =>
-      withCards
-        ? { mediaType: d.mediaType, mediaId: d.mediaId, status: d.status, card: d.card }
-        : { mediaType: d.mediaType, mediaId: d.mediaId, status: d.status },
-    )
+    const items = docs.map((d) => {
+      const base = {
+        mediaType: d.mediaType,
+        mediaId: d.mediaId,
+        status: d.status,
+        rating: d.rating ?? null,
+        bumpedAt: d.bumpedAt ? d.bumpedAt.toISOString() : null,
+      }
+      return withCards ? { ...base, card: d.card } : base
+    })
 
     return NextResponse.json({ success: true, items })
   } catch (error) {

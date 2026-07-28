@@ -11,6 +11,12 @@ export interface SavedItem {
   mediaType: MediaType
   mediaId: string
   status: SavedStatus
+  // The user's own 1-10 rating (server snapshot), null if unrated. Live in-session
+  // changes are reflected via the provider; this drives the "Your rating" sort.
+  rating?: number | null
+  // ISO timestamp when the item was "bumped" (pinned to top), or null. Server
+  // snapshot; live changes come via the provider. See getBumpedTime below.
+  bumpedAt?: string | null
   card: SavedCard
   savedAt: string
 }
@@ -64,6 +70,11 @@ export function getSavedTime(item: SavedItem): number | null {
   return Number.isFinite(time) ? time : null
 }
 
+// The user's own 1-10 rating (server snapshot), or null if they haven't rated it.
+export function getUserRating(item: SavedItem): number | null {
+  return typeof item.rating === "number" ? item.rating : null
+}
+
 // Normalized to a 0-10 scale (Google Books averages are out of 5, TMDB out of 10).
 export function getRating(item: SavedItem): number | null {
   if (item.mediaType === "book") {
@@ -76,6 +87,20 @@ export function getRating(item: SavedItem): number | null {
 export function getTitle(item: SavedItem): string {
   if (item.mediaType === "book") return item.card.volumeInfo?.title || "Untitled"
   return item.card.title || item.card.name || "Untitled"
+}
+
+// Lowercased haystack for the Library search box: title plus people (cast /
+// director / creator / writers, already lowercased in card.people) for movies &
+// series, or authors for books. Lets a search match by who's in it, not just its
+// title. People are best-effort - see derivePeople in lib/saved-media.ts.
+export function getSearchText(item: SavedItem): string {
+  const parts = [getTitle(item).toLowerCase()]
+  if (item.mediaType === "book") {
+    for (const author of item.card.volumeInfo?.authors ?? []) parts.push(author.toLowerCase())
+  } else {
+    for (const name of item.card.people ?? []) parts.push(name)
+  }
+  return parts.join(" ")
 }
 
 export function getPosterUrl(item: SavedItem): string | null {
@@ -192,7 +217,7 @@ export function pillClass(active: boolean, activeClass = "bg-primary text-white"
 
 // --- sorting ---
 
-export type SortField = "saved" | "published" | "rating" | "length"
+export type SortField = "saved" | "published" | "rating" | "userRating" | "length"
 export type SortDir = "asc" | "desc"
 
 export const DEFAULT_SORT_FIELD: SortField = "saved"
@@ -202,6 +227,7 @@ export const SORT_FIELD_OPTIONS: { key: SortField; label: string; bookLabel?: st
   { key: "saved", label: "Date Saved" },
   { key: "published", label: "Release Date", bookLabel: "Published Date" },
   { key: "rating", label: "Rating" },
+  { key: "userRating", label: "Your Rating" },
   { key: "length", label: "Runtime", bookLabel: "Pages" },
 ]
 
@@ -213,6 +239,8 @@ function getSortValue(item: SavedItem, field: SortField): number | null {
       return getPublishedTime(item)
     case "rating":
       return getRating(item)
+    case "userRating":
+      return getUserRating(item)
     case "length":
       return getLength(item)
   }

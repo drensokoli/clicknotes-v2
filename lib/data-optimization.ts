@@ -44,6 +44,9 @@ export interface OptimizedMovie {
     rated: string;
     runtime: string;
     awards: string;
+    rottenTomatoes?: string;
+    metacritic?: string;
+    imdbRating?: string;
   };
   stremioLink?: string;
 }
@@ -95,6 +98,9 @@ export interface OptimizedSeries {
     rated: string;
     runtime: string;
     awards: string;
+    rottenTomatoes?: string;
+    metacritic?: string;
+    imdbRating?: string;
   };
   stremioLink?: string;
 }
