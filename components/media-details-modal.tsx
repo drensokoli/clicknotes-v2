@@ -894,6 +894,8 @@ export function MediaDetailsModal({
                       rottenTomatoes={omdbData?.rottenTomatoes}
                       metacritic={omdbData?.metacritic}
                       imdbRating={omdbData?.imdbRating}
+                      title={getTitle()}
+                      imdbId={omdbData?.imdbId}
                     />
                   )}
 

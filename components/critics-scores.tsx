@@ -7,6 +7,9 @@ interface CriticsScoresProps {
   rottenTomatoes?: string
   metacritic?: string
   imdbRating?: string
+  // For constructing clickable links to the respective sites
+  title?: string
+  imdbId?: string
 }
 
 // Fresh (>=60%) shows a red tomato; rotten (<60%) shows a green splat - the two
@@ -40,11 +43,16 @@ function metacriticColor(score: number): string {
   return "#ff6874"
 }
 
-export function CriticsScores({ rottenTomatoes, metacritic, imdbRating }: CriticsScoresProps) {
+export function CriticsScores({ rottenTomatoes, metacritic, imdbRating, title, imdbId }: CriticsScoresProps) {
   if (!rottenTomatoes && !metacritic && !imdbRating) return null
 
   const rtNumber = rottenTomatoes ? parseInt(rottenTomatoes, 10) : null
   const metaNumber = metacritic ? parseInt(metacritic, 10) : null
+
+  // Build links to the respective sites
+  const rtUrl = title ? `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}` : null
+  const metaUrl = title ? `https://www.metacritic.com/search?search=${encodeURIComponent(title)}` : null
+  const imdbUrl = imdbId ? `https://www.imdb.com/title/${imdbId}` : null
 
   return (
     <div>
@@ -52,18 +60,30 @@ export function CriticsScores({ rottenTomatoes, metacritic, imdbRating }: Critic
         Critics Scores
       </h3>
       <div className="flex flex-wrap items-stretch gap-3">
-        {rottenTomatoes && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-elevated">
+        {rottenTomatoes && rtUrl && (
+          <a
+            href={rtUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-elevated hover:bg-border transition-colors hover:cursor-pointer"
+            title="View on Rotten Tomatoes"
+          >
             <TomatoIcon fresh={rtNumber !== null && rtNumber >= 60} />
             <div className="leading-tight">
               <p className="text-sm font-bold text-foreground">{rottenTomatoes}</p>
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Rotten Tomatoes</p>
             </div>
-          </div>
+          </a>
         )}
 
-        {metaNumber !== null && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-elevated">
+        {metaNumber !== null && metaUrl && (
+          <a
+            href={metaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-elevated hover:bg-border transition-colors hover:cursor-pointer"
+            title="View on Metacritic"
+          >
             <span
               className="flex items-center justify-center w-8 h-8 rounded text-sm font-bold text-black"
               style={{ backgroundColor: metacriticColor(metaNumber) }}
@@ -74,11 +94,17 @@ export function CriticsScores({ rottenTomatoes, metacritic, imdbRating }: Critic
               <p className="text-sm font-bold text-foreground">{metaNumber}/100</p>
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Metacritic</p>
             </div>
-          </div>
+          </a>
         )}
 
-        {imdbRating && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-elevated">
+        {imdbRating && imdbUrl && (
+          <a
+            href={imdbUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-elevated hover:bg-border transition-colors hover:cursor-pointer"
+            title="View on IMDb"
+          >
             <span className="flex items-center justify-center px-1.5 h-6 rounded-sm bg-[#f5c518] text-black text-xs font-black tracking-tight">
               IMDb
             </span>
@@ -86,7 +112,7 @@ export function CriticsScores({ rottenTomatoes, metacritic, imdbRating }: Critic
               <p className="text-sm font-bold text-foreground">{imdbRating}/10</p>
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground">IMDb Rating</p>
             </div>
-          </div>
+          </a>
         )}
       </div>
     </div>
