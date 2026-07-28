@@ -3,6 +3,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
 import { SavedMediaProvider } from "@/components/saved-media-provider";
+import { BrowsableListProvider } from "@/components/browsable-list-provider";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Analytics } from "@vercel/analytics/next"
@@ -68,8 +69,13 @@ export default async function RootLayout({
             disableTransitionOnChange={true}
           >
             <SavedMediaProvider>
-              {children}
-              {modal}
+              {/* Wraps both slots (not just children) so the modal - a server-rendered
+                  sibling under app/@modal, not a descendant of the page - can read the
+                  list a page like Home publishes. See browsable-list-provider.tsx. */}
+              <BrowsableListProvider>
+                {children}
+                {modal}
+              </BrowsableListProvider>
               <Analytics />
             </SavedMediaProvider>
             <Footer />
