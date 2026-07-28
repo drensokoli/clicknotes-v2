@@ -21,12 +21,15 @@ interface MediaDetailsModalProps {
   tmdbApiKey: string
   omdbApiKeys: string[]
   // Optional carousel navigation through a list (used by the Library - Feature 3).
-  // When provided, prev/next arrows, ← / → keys, and horizontal swipe move between
+  // When provided, a bottom pager bar, ← / → keys, and horizontal swipe move between
   // items. Omitted by the route-based modal, which shows a single item.
   onPrev?: () => void
   onNext?: () => void
   hasPrev?: boolean
   hasNext?: boolean
+  // 1-based position in the carousel and its length, shown in the pager ("3 of 24").
+  position?: number
+  total?: number
 }
 
 export function MediaDetailsModal({
@@ -39,6 +42,8 @@ export function MediaDetailsModal({
   onNext,
   hasPrev = false,
   hasNext = false,
+  position,
+  total,
 }: MediaDetailsModalProps) {
   const { getStatus, toggle, getRating: getUserRating, rate, getBump, toggleBump } = useSavedMedia()
   const [detailedData, setDetailedData] = useState<MovieDetails | TVDetails | null>(null)
@@ -110,34 +115,6 @@ export function MediaDetailsModal({
         duration: 0.4,
         delay: 0.2,
         ease: "easeOut" as const
-      }
-    }
-  }
-
-  const buttonVariants = {
-    hidden: { opacity: 0, y: 20, scale: 0.9 },
-    visible: (i: number) => ({
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: {
-        duration: 0.3,
-        delay: 0.4 + (i * 0.1),
-        ease: "easeOut" as const
-      }
-    }),
-    hover: {
-      scale: 1.05,
-      y: -2,
-      transition: {
-        duration: 0.2,
-        ease: "easeOut" as const
-      }
-    },
-    tap: {
-      scale: 0.95,
-      transition: {
-        duration: 0.1
       }
     }
   }
@@ -498,124 +475,107 @@ export function MediaDetailsModal({
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="relative w-full max-w-4xl max-h-[90vh] bg-surface rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+            className="relative flex flex-col w-full max-w-4xl max-h-[90vh] bg-surface rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
           >
-            {/* Utility cluster - Share / More / Close. These are chrome, not content
-                actions, so they live in the header instead of competing for space in
-                the action rows below. */}
-            <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
-              {/* Share - native share sheet where available (handleShare), else a
-                  dropdown with per-platform links + copy-link. */}
-              <div className="relative" ref={shareMenuRef}>
+            {/* Scrollable content. Marked `relative` so the utility cluster below
+                is positioned against the scrolling content - meaning it scrolls away
+                together with the hero instead of floating over the whole modal. */}
+            <div
+              className="relative flex-1 min-h-0 overflow-y-auto"
+              onTouchStart={showNav ? handleTouchStart : undefined}
+              onTouchEnd={showNav ? handleTouchEnd : undefined}
+            >
+              {/* Utility cluster - Share / More / Close. Chrome rather than content
+                  actions, so it sits over the hero and scrolls with it. Escape and a
+                  backdrop click still close the modal from any scroll position. */}
+              <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
+                {/* Share - native share sheet where available (handleShare), else a
+                    dropdown with per-platform links + copy-link. */}
+                <div className="relative" ref={shareMenuRef}>
+                  <button
+                    onClick={handleShare}
+                    title="Share"
+                    aria-label="Share"
+                    className="w-10 h-10 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-sm hover:cursor-pointer"
+                  >
+                    <Share2 className="w-[18px] h-[18px]" />
+                  </button>
+
+                  <AnimatePresence>
+                    {shareMenuOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute top-full mt-2 right-0 w-48 bg-background rounded-xl py-2 z-20 shadow-lg border border-border"
+                      >
+                        <a
+                          href={`https://wa.me/?text=${encodeURIComponent(`${getTitle()} ${getShareUrl()}`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setShareMenuOpen(false)}
+                          className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
+                        >
+                          <MessageCircle className="w-4 h-4 mr-3 text-green-600" />
+                          WhatsApp
+                        </a>
+                        <a
+                          href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getShareUrl())}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setShareMenuOpen(false)}
+                          className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
+                        >
+                          <Facebook className="w-4 h-4 mr-3 text-blue-600" />
+                          Facebook
+                        </a>
+                        <a
+                          href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(getShareUrl())}&text=${encodeURIComponent(getTitle())}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setShareMenuOpen(false)}
+                          className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
+                        >
+                          <Twitter className="w-4 h-4 mr-3 text-sky-500" />
+                          X (Twitter)
+                        </a>
+                        <button
+                          onClick={handleCopyLink}
+                          className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
+                        >
+                          <Link2 className="w-4 h-4 mr-3 text-muted-foreground" />
+                          Copy Link
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* More - the item's canonical page on TMDB / Google Books */}
+                {getExternalLink() && (
+                  <a
+                    href={getExternalLink()!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="View on TMDB"
+                    aria-label="View more details externally"
+                    className="w-10 h-10 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-sm hover:cursor-pointer"
+                  >
+                    <ExternalLink className="w-[18px] h-[18px]" />
+                  </a>
+                )}
+
                 <button
-                  onClick={handleShare}
-                  title="Share"
-                  aria-label="Share"
+                  onClick={closeModal}
+                  title="Close"
+                  aria-label="Close"
                   className="w-10 h-10 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-sm hover:cursor-pointer"
                 >
-                  <Share2 className="w-[18px] h-[18px]" />
+                  <X className="w-5 h-5" />
                 </button>
-
-                <AnimatePresence>
-                  {shareMenuOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute top-full mt-2 right-0 w-48 bg-background rounded-xl py-2 z-20 shadow-lg border border-border"
-                    >
-                      <a
-                        href={`https://wa.me/?text=${encodeURIComponent(`${getTitle()} ${getShareUrl()}`)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setShareMenuOpen(false)}
-                        className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
-                      >
-                        <MessageCircle className="w-4 h-4 mr-3 text-green-600" />
-                        WhatsApp
-                      </a>
-                      <a
-                        href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getShareUrl())}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setShareMenuOpen(false)}
-                        className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
-                      >
-                        <Facebook className="w-4 h-4 mr-3 text-blue-600" />
-                        Facebook
-                      </a>
-                      <a
-                        href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(getShareUrl())}&text=${encodeURIComponent(getTitle())}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setShareMenuOpen(false)}
-                        className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
-                      >
-                        <Twitter className="w-4 h-4 mr-3 text-sky-500" />
-                        X (Twitter)
-                      </a>
-                      <button
-                        onClick={handleCopyLink}
-                        className="flex items-center w-full px-4 py-2 text-sm text-foreground theme-hover-light hover:cursor-pointer transition-colors"
-                      >
-                        <Link2 className="w-4 h-4 mr-3 text-muted-foreground" />
-                        Copy Link
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
 
-              {/* More - the item's canonical page on TMDB / Google Books */}
-              {getExternalLink() && (
-                <a
-                  href={getExternalLink()!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="View on TMDB"
-                  aria-label="View more details externally"
-                  className="w-10 h-10 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-sm hover:cursor-pointer"
-                >
-                  <ExternalLink className="w-[18px] h-[18px]" />
-                </a>
-              )}
-
-              <button
-                onClick={closeModal}
-                title="Close"
-                aria-label="Close"
-                className="w-10 h-10 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-sm hover:cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Carousel arrows (Feature 3) - only when the parent wires prev/next.
-                Disabled at the list ends. Sit above the content, edge-centered. */}
-            {showNav && (
-              <>
-                <button
-                  onClick={onPrev}
-                  disabled={!hasPrev}
-                  aria-label="Previous item"
-                  className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center backdrop-blur-sm transition-all hover:bg-black/70 disabled:opacity-30 disabled:cursor-default hover:cursor-pointer"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={onNext}
-                  disabled={!hasNext}
-                  aria-label="Next item"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center backdrop-blur-sm transition-all hover:bg-black/70 disabled:opacity-30 disabled:cursor-default hover:cursor-pointer"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </>
-            )}
-
-            {/* Scrollable content */}
-            <div className="max-h-[90vh] overflow-y-auto" onTouchStart={showNav ? handleTouchStart : undefined} onTouchEnd={showNav ? handleTouchEnd : undefined}>
               {/* Header with backdrop */}
               <div className="relative h-48 sm:h-64 md:h-80 overflow-hidden">
                 {getBackdropUrl() ? (
@@ -698,91 +658,25 @@ export function MediaDetailsModal({
                 </div>
               </div>
 
-              {/* Actions - two coherent groups instead of three mixed rows:
-                    1. Primary: what you can do with this media right now
-                       (Watch / Read / Trailer).
-                    2. Your library: everything describing YOUR relationship to it
-                       (status, rating, bump), bounded in one panel so it reads as a
-                       single unit rather than being scattered between action rows.
-                  Share / More moved to the header utility cluster - they're chrome. */}
-              <div className="flex flex-col items-center gap-4 pt-5 sm:pt-6 px-4 sm:px-6">
-
-                {/* 1. Primary actions */}
-                {(item.type === 'book' || isLoading || omdbData?.imdbId || getTrailerUrl()) && (
-                  <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
-                    {/* Watch on Stremio - Only for movies/TV with IMDB ID */}
-                    {!isLoading && (item.type === 'movie' || item.type === 'series') && omdbData?.imdbId && (
-                      <motion.a
-                        href={`https://www.strem.io/s/${item.type === 'movie' ? 'movie' : 'series'}/${getTitle().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 px-4 py-2.5 bg-[#7B5BF5] hover:bg-[#6344e2] text-white rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
-                        variants={buttonVariants}
-                        custom={0}
-                        whileHover="hover"
-                        whileTap="tap"
-                      >
-                        <MonitorPlay className="w-4 h-4" />
-                        Watch
-                      </motion.a>
-                    )}
-
-                    {/* Read on Anna's Archive - Only for books */}
-                    {item.type === 'book' && (
-                      <motion.a
-                        href={`https://annas-archive.org/search?q=${encodeURIComponent(getTitle())}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 px-4 py-2.5 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
-                        variants={buttonVariants}
-                        custom={1}
-                        whileHover="hover"
-                        whileTap="tap"
-                      >
-                        <BookOpen className="w-4 h-4" />
-                        Read
-                      </motion.a>
-                    )}
-
-                    {/* Loading placeholder for Watch/Trailer while their data is still
-                        being fetched live (pre-fetched items resolve isLoading to false
-                        almost immediately, so this only shows for the on-demand case) */}
-                    {isLoading && (item.type === 'movie' || item.type === 'series') && (
-                      <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-surface-elevated text-muted-foreground text-sm sm:text-base">
-                        <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/40 border-t-transparent animate-spin" />
-                        Loading
-                      </div>
-                    )}
-
-                    {/* Watch Trailer - Only for movies/TV */}
-                    {!isLoading && (item.type === 'movie' || item.type === 'series') && getTrailerUrl() && (
-                      <motion.button
-                        onClick={() => {
-                          const trailerSection = document.getElementById('trailer-section')
-                          if (trailerSection) trailerSection.scrollIntoView({ behavior: 'smooth' })
-                        }}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium text-sm sm:text-base hover:cursor-pointer"
-                        variants={buttonVariants}
-                        custom={2}
-                        whileHover="hover"
-                        whileTap="tap"
-                        title="Scroll to trailer section"
-                      >
-                        <Play className="w-4 h-4" />
-                        Trailer
-                      </motion.button>
-                    )}
-                  </div>
-                )}
-
-                {/* 2. Your library - status, rating and bump in one bounded panel */}
-                <div className="w-full max-w-xl rounded-xl border border-border/50 bg-surface-elevated/40 p-3 sm:p-4">
-                  <div className="flex items-center justify-between gap-3 mb-2.5">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      {savedStatus ? 'In your library' : 'Add to your library'}
+              {/* Content - one continuous column. "Your library" leads (it's why you
+                  opened this), then the primary Watch/Read action, then the
+                  informational sections. Every block shares the same padding, spacing
+                  and heading style, so nothing reads as a bolted-on panel. */}
+              <motion.div
+                className="p-4 sm:p-6 md:p-8 space-y-6"
+                variants={contentVariants}
+                initial="hidden"
+                animate="visible"
+              >
+                {/* Your library - status, rating and pin-to-top. Same section rhythm as
+                    Genres/Overview/Cast below: a plain heading over full-width content,
+                    deliberately with no nested card or background of its own. */}
+                <div>
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                      Your Library
                     </h3>
-                    {/* Bump lives here as a quiet secondary toggle - it only means
-                        anything for an item that's already in the library. */}
+                    {/* Pin only means something for an item already in the library. */}
                     {savedStatus && (
                       <button
                         onClick={() => toggleBump(item.type, item.id)}
@@ -799,16 +693,15 @@ export function MediaDetailsModal({
                     )}
                   </div>
 
-                  {/* Status as a real segmented control - one state at a time, which is
-                      what it actually is. Clicking the active segment removes the item. */}
-                  <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-surface">
+                  {/* One state at a time. Clicking the active one removes the item. */}
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       onClick={() => toggle(item.type, item.id, "to_watch", item)}
                       title={savedStatus === "to_watch" ? "Click again to remove from your library" : "Save for later"}
-                      className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-2 py-2 rounded-md text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
+                      className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2.5 rounded-lg text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
                         savedStatus === "to_watch"
-                          ? "bg-primary text-white shadow-sm"
-                          : "text-muted-foreground hover:text-foreground hover:bg-surface-elevated"
+                          ? "bg-primary text-white"
+                          : "bg-surface-elevated text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       <Bookmark className={`w-4 h-4 shrink-0 ${savedStatus === "to_watch" ? "fill-current" : ""}`} />
@@ -818,10 +711,10 @@ export function MediaDetailsModal({
                     <button
                       onClick={() => toggle(item.type, item.id, "watching", item)}
                       title={savedStatus === "watching" ? "Click again to remove from your library" : "Mark as in progress"}
-                      className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-2 py-2 rounded-md text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
+                      className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2.5 rounded-lg text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
                         savedStatus === "watching"
-                          ? "bg-amber-600 text-white shadow-sm"
-                          : "text-muted-foreground hover:text-foreground hover:bg-surface-elevated"
+                          ? "bg-amber-600 text-white"
+                          : "bg-surface-elevated text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       <Play className={`w-4 h-4 shrink-0 ${savedStatus === "watching" ? "fill-current" : ""}`} />
@@ -831,10 +724,10 @@ export function MediaDetailsModal({
                     <button
                       onClick={() => toggle(item.type, item.id, "watched", item)}
                       title={savedStatus === "watched" ? "Click again to remove from your library" : "Mark as completed"}
-                      className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-2 py-2 rounded-md text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
+                      className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2.5 rounded-lg text-[11px] sm:text-sm font-medium leading-tight text-center whitespace-nowrap transition-colors hover:cursor-pointer ${
                         savedStatus === "watched"
-                          ? "bg-green-600 text-white shadow-sm"
-                          : "text-muted-foreground hover:text-foreground hover:bg-surface-elevated"
+                          ? "bg-green-600 text-white"
+                          : "bg-surface-elevated text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       <Eye className={`w-4 h-4 shrink-0 ${savedStatus === "watched" ? "fill-current" : ""}`} />
@@ -843,9 +736,9 @@ export function MediaDetailsModal({
                   </div>
 
                   {/* Rating - only meaningful once the item is in the library, and it
-                      sits directly under the status it belongs with. */}
+                      belongs directly under the status it accompanies. */}
                   {savedStatus && (
-                    <div className="mt-3 pt-3 border-t border-border/50">
+                    <div className="mt-4">
                       <RatingStars
                         value={getUserRating(item.type, item.id)}
                         onChange={(value) => rate(item.type, item.id, value)}
@@ -853,14 +746,37 @@ export function MediaDetailsModal({
                     </div>
                   )}
                 </div>
-              </div>
-              {/* Content */}
-              <motion.div
-                className="p-4 sm:p-6 md:p-8 space-y-6"
-                variants={contentVariants}
-                initial="hidden"
-                animate="visible"
-              >
+
+                {/* Primary action - Watch (movies/series) or Read (books). Kept high in
+                    the column and full-width so it's unmissable, while still being a
+                    normal section rather than a floating button row. */}
+                {item.type === 'book' ? (
+                  <a
+                    href={`https://annas-archive.org/search?q=${encodeURIComponent(getTitle())}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg transition-colors font-semibold text-sm sm:text-base hover:cursor-pointer"
+                  >
+                    <BookOpen className="w-5 h-5" />
+                    Read this book
+                  </a>
+                ) : isLoading ? (
+                  <div className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg bg-surface-elevated text-muted-foreground text-sm sm:text-base">
+                    <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/40 border-t-transparent animate-spin" />
+                    Finding where to watch...
+                  </div>
+                ) : omdbData?.imdbId ? (
+                  <a
+                    href={`https://www.strem.io/s/${item.type === 'movie' ? 'movie' : 'series'}/${getTitle().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${omdbData.imdbId.replace('tt', '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#7B5BF5] hover:bg-[#6344e2] text-white rounded-lg transition-colors font-semibold text-sm sm:text-base hover:cursor-pointer"
+                  >
+                    <MonitorPlay className="w-5 h-5" />
+                    Watch on Stremio
+                  </a>
+                ) : null}
+
                 {/* Genres/Categories */}
                 {getGenres().length > 0 && (
                   <motion.div
@@ -1096,6 +1012,38 @@ export function MediaDetailsModal({
                 </div>
               </motion.div>
             </div>
+
+            {/* Pager (Feature 3) - a slim bar pinned below the scroll area rather than
+                arrows floating over the content. Always visible, never overlaps
+                anything, and shows where you are in the list. Swipe and the ← / →
+                keys do the same thing. */}
+            {showNav && (
+              <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-t border-border/60 bg-surface">
+                <button
+                  onClick={onPrev}
+                  disabled={!hasPrev}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-foreground transition-colors hover:bg-surface-elevated disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-default hover:cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline">Previous</span>
+                </button>
+
+                {position !== undefined && total !== undefined && (
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {position} of {total}
+                  </span>
+                )}
+
+                <button
+                  onClick={onNext}
+                  disabled={!hasNext}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-foreground transition-colors hover:bg-surface-elevated disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-default hover:cursor-pointer"
+                >
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

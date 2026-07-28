@@ -118,8 +118,25 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
   })
   const [searchQuery, setSearchQuery] = useState("")
   const [shuffleOpen, setShuffleOpen] = useState(false)
-  // Index into visibleItems for the in-place detail modal (Feature 3); null = closed.
+  // In-place detail modal (Feature 3). `carouselItems` is a *frozen snapshot* of the
+  // list taken when the modal opens, and `activeIndex` indexes into that snapshot -
+  // not into the live `visibleItems`. Without the snapshot, changing an item's status
+  // from inside the modal drops it out of the live filtered list, every later item
+  // shifts down one, and the modal appears to jump to the next item. Freezing keeps
+  // the open modal (and the prev/next order) stable; the grid re-derives normally once
+  // the modal is closed, at which point status changes take full effect.
+  const [carouselItems, setCarouselItems] = useState<SavedItem[] | null>(null)
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
+
+  const openInfoAt = (index: number, snapshot: SavedItem[]) => {
+    setCarouselItems(snapshot)
+    setActiveIndex(index)
+  }
+
+  const closeInfo = () => {
+    setActiveIndex(null)
+    setCarouselItems(null)
+  }
   const searchInputRef = useRef<HTMLInputElement>(null)
   const gridScrollRef = useRef<HTMLDivElement>(null)
   useSlashFocus(searchInputRef)
@@ -369,7 +386,7 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
                     <MediaCard
                       key={`${item.mediaType}:${item.mediaId}`}
                       item={item.card as unknown as MediaItem}
-                      onOpenInfo={() => setActiveIndex(index)}
+                      onOpenInfo={() => openInfoAt(index, visibleItems)}
                     />
                   ))}
                 </div>
@@ -379,21 +396,24 @@ export function SavedList({ items, tmdbApiKey, omdbApiKeys }: SavedListProps) {
         </main>
       </div>
 
-      {/* In-place detail modal with prev/next through the current filtered+sorted
-          list (Feature 3). activeIndex is an index into visibleItems, so navigation
-          honors whatever filtering/sorting/bumping is applied. */}
-      {activeIndex !== null && visibleItems[activeIndex] && (
+      {/* In-place detail modal with prev/next through the list as it was when the
+          modal opened (see the carouselItems snapshot above) - the order honors
+          whatever filtering/sorting/bumping was applied at that moment, and stays
+          put even if you change an item's status while browsing. */}
+      {activeIndex !== null && carouselItems && carouselItems[activeIndex] && (
         <MediaDetailsModal
-          key={`${visibleItems[activeIndex].mediaType}:${visibleItems[activeIndex].mediaId}`}
-          item={visibleItems[activeIndex].card as unknown as MediaItem}
+          key={`${carouselItems[activeIndex].mediaType}:${carouselItems[activeIndex].mediaId}`}
+          item={carouselItems[activeIndex].card as unknown as MediaItem}
           isOpen
-          onClose={() => setActiveIndex(null)}
+          onClose={closeInfo}
           tmdbApiKey={tmdbApiKey}
           omdbApiKeys={omdbApiKeys}
+          position={activeIndex + 1}
+          total={carouselItems.length}
           hasPrev={activeIndex > 0}
-          hasNext={activeIndex < visibleItems.length - 1}
+          hasNext={activeIndex < carouselItems.length - 1}
           onPrev={() => setActiveIndex((i) => (i !== null && i > 0 ? i - 1 : i))}
-          onNext={() => setActiveIndex((i) => (i !== null && i < visibleItems.length - 1 ? i + 1 : i))}
+          onNext={() => setActiveIndex((i) => (i !== null && i < carouselItems.length - 1 ? i + 1 : i))}
         />
       )}
 
