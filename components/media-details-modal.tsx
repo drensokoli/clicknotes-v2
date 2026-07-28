@@ -42,10 +42,9 @@ interface MediaDetailsModalProps {
   onClose: () => void
   tmdbApiKey: string
   omdbApiKeys: string[]
-  // Optional carousel navigation through a list (used by the Library and, via
-  // media-modal-route.tsx, the Home/Popular pages). When provided, a bottom pager
-  // bar, ← / → keys, and horizontal swipe move between items. Omitted only when
-  // there's no list to browse (e.g. a direct visit to /movie/[id]).
+  // Optional carousel navigation through a list (used by the Library - Feature 3).
+  // When provided, a bottom pager bar, ← / → keys, and horizontal swipe move between
+  // items. Omitted by the route-based modal, which shows a single item.
   onPrev?: () => void
   onNext?: () => void
   hasPrev?: boolean
@@ -53,13 +52,6 @@ interface MediaDetailsModalProps {
   // 1-based position in the carousel and its length, shown in the pager ("3 of 24").
   position?: number
   total?: number
-  // The Library's modal is a single persistent instance that just swaps props as you
-  // page through, so its first-ever render shouldn't animate (initial={false} below).
-  // The route-based modal instead remounts fresh on every step (see
-  // media-modal-route.tsx), so it needs to opt into animating that mount, and to be
-  // told which direction to slide from since it has no prior render to diff against.
-  animateContentOnMount?: boolean
-  initialDirection?: number
 }
 
 export function MediaDetailsModal({
@@ -74,8 +66,6 @@ export function MediaDetailsModal({
   hasNext = false,
   position,
   total,
-  animateContentOnMount = false,
-  initialDirection = 1,
 }: MediaDetailsModalProps) {
   const { getStatus, toggle, getRating: getUserRating, rate, getBump, toggleBump } = useSavedMedia()
   const [detailedData, setDetailedData] = useState<MovieDetails | TVDetails | null>(null)
@@ -88,10 +78,8 @@ export function MediaDetailsModal({
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Which way the carousel last moved, so the content slides in from the correct
-  // side (+1 = went to a later item, -1 = an earlier one). Seeded from
-  // initialDirection for the route-based modal, which remounts fresh on every step
-  // and so has no previous position to diff against below.
-  const [navDirection, setNavDirection] = useState(initialDirection)
+  // side (+1 = went to a later item, -1 = an earlier one).
+  const [navDirection, setNavDirection] = useState(1)
   const prevPositionRef = useRef(position)
   useEffect(() => {
     const previous = prevPositionRef.current
@@ -643,7 +631,7 @@ export function MediaDetailsModal({
               {/* Everything that belongs to the current item lives inside this keyed
                   block, so paging swaps just the content with a directional slide
                   while the modal shell, pager and utility cluster stay put. */}
-              <AnimatePresence mode="wait" custom={navDirection} initial={animateContentOnMount}>
+              <AnimatePresence mode="wait" custom={navDirection} initial={false}>
                 <motion.div
                   key={itemKey ?? "item"}
                   custom={navDirection}

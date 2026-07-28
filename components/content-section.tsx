@@ -28,7 +28,6 @@ import { PopularGenrePills } from "./popular-genre-pills"
 import { PersonChipRow } from "./person-chip-row"
 import { useSlashFocus } from "@/hooks/use-slash-focus"
 import { ScrollToTopButton } from "./scroll-to-top-button"
-import { useBrowsableList, toBrowsableEntry } from "./browsable-list-provider"
 
 type Section = "movies" | "series" | "books"
 
@@ -728,22 +727,6 @@ export function ContentSection({
         searchSortDir,
       )
     : rawData
-
-  // Publish exactly what's on screen right now (post search/genre/person/sort) so the
-  // intercepted detail modal can offer prev/next through it - see
-  // browsable-list-provider.tsx. Guarded by a signature comparison rather than just
-  // depending on `filteredData` directly, since that array is a fresh reference on
-  // every render (every keystroke in the search box included) even when its contents
-  // haven't changed.
-  const { setList } = useBrowsableList()
-  const browsableSignatureRef = useRef<string>("")
-  useEffect(() => {
-    const entries = filteredData.map(toBrowsableEntry)
-    const signature = entries.map((e) => `${e.type}:${e.id}`).join(",")
-    if (signature === browsableSignatureRef.current) return
-    browsableSignatureRef.current = signature
-    setList(entries)
-  }, [filteredData, setList])
 
   const getSectionTitle = () => {
     switch (activeSection) {
