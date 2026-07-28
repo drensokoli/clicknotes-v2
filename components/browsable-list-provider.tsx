@@ -8,9 +8,21 @@ export interface BrowsableListEntry {
   id: string | number
 }
 
+interface PendingNav {
+  direction: number
+}
+
 interface BrowsableListContextType {
   list: BrowsableListEntry[]
   setList: (list: BrowsableListEntry[]) => void
+  // Set by the route-based modal (media-modal-route.tsx) right before it navigates to
+  // a sibling item, so the *next* mount of that modal - a fresh component instance,
+  // since Next.js re-executes the intercepted route's server segment per id and its
+  // own local state (e.g. which way the carousel was moving) doesn't survive that -
+  // knows which direction to slide its content in from. Consumed once and cleared;
+  // a plain, unrelated open of the modal should never inherit a stale direction.
+  pendingNav: PendingNav | null
+  setPendingNav: (nav: PendingNav | null) => void
 }
 
 const BrowsableListContext = createContext<BrowsableListContextType | null>(null)
@@ -22,12 +34,13 @@ const BrowsableListContext = createContext<BrowsableListContextType | null>(null
 // server-rendered sibling under app/@modal rather than a child of the grid, can look
 // up prev/next siblings for the item it's currently showing. This mirrors the
 // Library's in-place carousel (components/saved-list.tsx), but since Home's modal is
-// route-based rather than in-place, prev/next there navigates via router.push to the
-// sibling's own /movie|series|book/[id] URL instead of just swapping local state.
+// route-based rather than in-place, prev/next there navigates via router.replace to
+// the sibling's own /movie|series|book/[id] URL instead of just swapping local state.
 export function BrowsableListProvider({ children }: { children: ReactNode }) {
   const [list, setList] = useState<BrowsableListEntry[]>([])
+  const [pendingNav, setPendingNav] = useState<PendingNav | null>(null)
 
-  const value = useMemo(() => ({ list, setList }), [list])
+  const value = useMemo(() => ({ list, setList, pendingNav, setPendingNav }), [list, pendingNav])
 
   return <BrowsableListContext.Provider value={value}>{children}</BrowsableListContext.Provider>
 }
