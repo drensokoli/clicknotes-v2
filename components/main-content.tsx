@@ -20,6 +20,10 @@ interface MainContentProps {
     series: number
     books: number
   }
+  // Keys for the in-place detail modal (mirrors the Library's - see
+  // content-section.tsx); the modal fetches any missing TMDB/OMDB details live.
+  tmdbApiKey: string
+  omdbApiKeys: string[]
 }
 
 export function MainContent({
@@ -31,6 +35,8 @@ export function MainContent({
   bookRanking = [],
   googleBooksApiKeys,
   redisKeysFetched,
+  tmdbApiKey,
+  omdbApiKeys,
 }: MainContentProps) {
   // Start with undefined to prevent flash of incorrect selected state
   const [activeSection, setActiveSection] = useState<Section | undefined>(undefined)
@@ -85,6 +91,8 @@ export function MainContent({
           bookRanking={bookRanking}
           googleBooksApiKeys={googleBooksApiKeys}
           redisKeysFetched={redisKeysFetched}
+          tmdbApiKey={tmdbApiKey}
+          omdbApiKeys={omdbApiKeys}
           externalActiveSection={activeSection}
           externalSearchQuery={searchQuery}
           externalSearchResults={searchResults}

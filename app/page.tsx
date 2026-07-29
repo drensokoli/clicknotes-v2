@@ -67,6 +67,15 @@ export default async function Home() {
   const nyTimesApiKey = process.env.NYTIMES_API_KEY!
   const baseUrl = process.env.BASE_URL || 'http://localhost:3000'
 
+  // Keys for the in-place detail modal (mirrors the Library's - see
+  // components/saved-list.tsx and content-section.tsx); the modal fetches any
+  // missing TMDB/OMDB details live in the browser.
+  const omdbApiKeys = [
+    process.env.OMDB_API_KEY_1 || "",
+    process.env.OMDB_API_KEY_2 || "",
+    process.env.OMDB_API_KEY_3 || "",
+  ]
+
   let movies: Movie[] = []
   let series: Series[] = []
   let books: Book[] = []
@@ -156,6 +165,8 @@ export default async function Home() {
         bookRanking={bookRanking}
         googleBooksApiKeys={googleBooksApiKeys}
         redisKeysFetched={redisKeysFetched}
+        tmdbApiKey={tmdbApiKey}
+        omdbApiKeys={omdbApiKeys}
       />
       </div>
     </div>

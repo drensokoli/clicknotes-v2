@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { MediaCard, MediaItem, Movie, Series, Book } from "./media-card"
+import { MediaDetailsModal } from "./media-details-modal"
 import {
   searchContentByTitle,
   searchBooksByTitle,
@@ -38,10 +39,16 @@ const MediaGrid = React.memo(function MediaGrid({
   items,
   activeSection,
   displayCounts,
+  onOpenInfo,
 }: {
   items: MediaItem[]
   activeSection: Section
   displayCounts: { movies: number; series: number; books: number }
+  // Opens the in-place detail modal (see the carousel state in ContentSection) at
+  // this card's position within validItems below - passing validItems itself as the
+  // snapshot keeps the carousel's prev/next order identical to what's on screen,
+  // rather than relying on a separately-computed list that could drift from it.
+  onOpenInfo: (index: number, snapshot: MediaItem[]) => void
 }) {
   const originalCount = items.length
   const validItems = items.filter((item) => {
@@ -89,6 +96,7 @@ const MediaGrid = React.memo(function MediaGrid({
               item={item}
               priority={index < 6}
               loading={index < 6 ? "eager" : "lazy"}
+              onOpenInfo={() => onOpenInfo(index, validItems)}
             />
           </div>
         )
@@ -123,6 +131,11 @@ interface ContentSectionProps {
     series: number
     books: number
   }
+  // Keys for the in-place detail modal (mirrors the Library's - see
+  // components/saved-list.tsx); the modal fetches any missing TMDB/OMDB details live
+  // in the browser, so these are the only server-side inputs it needs.
+  tmdbApiKey: string
+  omdbApiKeys: string[]
   // External state management props
   externalActiveSection?: Section
   externalSearchQuery?: string
@@ -142,6 +155,8 @@ export function ContentSection({
   bookRanking = [],
   googleBooksApiKeys,
   redisKeysFetched = { movies: 1, series: 1, books: 1 },
+  tmdbApiKey,
+  omdbApiKeys,
   externalActiveSection,
   externalSearchQuery,
   externalSearchResults,
@@ -208,6 +223,26 @@ export function ContentSection({
     series: 40,
     books: 40
   })
+
+  // In-place detail modal, mirroring the Library's carousel (components/saved-list.tsx)
+  // instead of the old route-based @modal interception - clicking a card just opens
+  // this modal with local state, no navigation involved, which is what made the
+  // Library's version immune to the scroll-jump/remount/history bugs the route-based
+  // one on Popular/Search had. `carouselItems` is a frozen snapshot of the grid taken
+  // when the modal opens, so prev/next keeps paging through the same order even if the
+  // underlying grid changes (e.g. more items load) while it's open.
+  const [carouselItems, setCarouselItems] = useState<MediaItem[] | null>(null)
+  const [activeIndex, setActiveIndex] = useState<number | null>(null)
+
+  const openInfoAt = useCallback((index: number, snapshot: MediaItem[]) => {
+    setCarouselItems(snapshot)
+    setActiveIndex(index)
+  }, [])
+
+  const closeInfo = useCallback(() => {
+    setActiveIndex(null)
+    setCarouselItems(null)
+  }, [])
 
   // Search result filter/sort (genre/era/min rating + sort field/direction) -
   // applied client-side on top of whatever the title search (or a selected
@@ -991,7 +1026,7 @@ export function ContentSection({
       */}
 
       {/* Grid - Always 2 columns on small screens */}
-      <MediaGrid items={filteredData} activeSection={activeSection} displayCounts={displayCounts} />
+      <MediaGrid items={filteredData} activeSection={activeSection} displayCounts={displayCounts} onOpenInfo={openInfoAt} />
 
       {/* Search Loading Skeleton */}
       {(isSearching || isLoadingCredits) && (
@@ -1069,6 +1104,27 @@ export function ContentSection({
       )}
 
       <ScrollToTopButton />
+
+      {/* In-place detail modal with prev/next through the grid exactly as it looked
+          when the modal opened (see the carouselItems snapshot above). Deliberately no
+          `key` on the modal: keying it on the item would remount the whole thing on
+          every prev/next, replaying the open-from-scratch animation instead of the
+          directional slide - see MediaDetailsModal. */}
+      {activeIndex !== null && carouselItems && carouselItems[activeIndex] && (
+        <MediaDetailsModal
+          item={carouselItems[activeIndex]}
+          isOpen
+          onClose={closeInfo}
+          tmdbApiKey={tmdbApiKey}
+          omdbApiKeys={omdbApiKeys}
+          position={activeIndex + 1}
+          total={carouselItems.length}
+          hasPrev={activeIndex > 0}
+          hasNext={activeIndex < carouselItems.length - 1}
+          onPrev={() => setActiveIndex((i) => (i !== null && i > 0 ? i - 1 : i))}
+          onNext={() => setActiveIndex((i) => (i !== null && i < carouselItems.length - 1 ? i + 1 : i))}
+        />
+      )}
     </div>
   )
 }
