@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic"
 export const metadata: Metadata = {
   title: "Library - ClickNotes",
   description: "Your saved movies, Series, and books.",
+  robots: { index: false, follow: false },
 }
 
 export default async function LibraryPage() {

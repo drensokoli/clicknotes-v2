@@ -10,10 +10,38 @@ import Footer from "@/components/footer"
 import { PWAInstallToast } from "@/components/pwa-install-toast"
 import { Toaster } from "@/components/ui/sonner"
 
+const SITE_URL = "https://www.clicknotes.site"
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "ClickNotes",
   description: "Save and organize your favorite movies, Series, and books",
   manifest: "/manifest.webmanifest",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    siteName: "ClickNotes",
+    url: SITE_URL,
+    title: "ClickNotes - Save Movies, Series & Books",
+    description: "Save and organize your favorite movies, Series, and books",
+    images: [{ url: "/logo-blue.png", width: 386, height: 184, alt: "ClickNotes" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ClickNotes - Save Movies, Series & Books",
+    description: "Save and organize your favorite movies, Series, and books",
+    images: ["/logo-blue.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
+  },
   icons: {
     icon: [
       // { url: "/favicon.ico", sizes: "any" },
@@ -57,9 +85,21 @@ export default async function RootLayout({
     session = null;
   }
 
+  const websiteJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "ClickNotes",
+    url: SITE_URL,
+    description: "Save and organize your favorite movies, Series, and books",
+  };
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+        />
         <AuthProvider session={session}>
           <ThemeProvider
             attribute="data-theme"

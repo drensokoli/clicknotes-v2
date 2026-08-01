@@ -13,16 +13,22 @@ export const metadata: Metadata = {
   description: "Discover and organize your favorite movies, Series, and books in one beautiful interface. Browse popular content and search for your favorites.",
   keywords: ["movies", "series", "books", "entertainment", "discover", "organize"],
   authors: [{ name: "Dren Sokoli" }],
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     title: "ClickNotes - Save Movies, Series & Books",
     description: "Discover and organize your favorite movies, Series, and books in one beautiful interface.",
     type: "website",
-    siteName: "ClickNotes"
+    siteName: "ClickNotes",
+    url: "/",
+    images: [{ url: "/logo-blue.png", width: 386, height: 184, alt: "ClickNotes" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "ClickNotes - Save Movies, Series & Books",
     description: "Discover and organize your favorite movies, Series, and books in one beautiful interface.",
+    images: ["/logo-blue.png"],
   }
 }
 
